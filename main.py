@@ -104,6 +104,7 @@ EXPERIMENT_CONFIGS = [
         'color': 'black',   #   color
         'marker': 'D'       #   marker (diamond)
     }
+
 ]
 
 # --- === 2. SIMULATION RUNNER === ---

@@ -11,13 +11,13 @@ NUM_ROUNDS = 80           # Total number of federated learning rounds
 NUM_CLIENTS = 30          # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 1   # Minimum clients to select each round
 MAX_CLIENTS_PER_ROUND = 26  # Maximum clients to select each round
-FRACTION_BYZANTINE = 0.4
+FRACTION_BYZANTINE = 0.3
 
 # --- === Model & Data Parameters === ---
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
-DATA_SPLIT_TYPE = 'BALANCED_IID'
+DATA_SPLIT_TYPE = 'UNBALANCED_IID'
 
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 2 
@@ -41,8 +41,8 @@ RWA_EPSILON = 1e-9
 ATTACK_NOISE_STD = 2.0  
 
 # ATTACK_TYPE:
-# Options: 'none', 'sign_flip', 'additive_noise'
-ATTACK_TYPE = 'additive_noise' 
+# Options: 'none', 'sign_flip', 'additive_noise', 'label_flip'
+ATTACK_TYPE = 'label_flip' 
 
 # --- === Performance Optimizations === ---
 EVALUATE_EVERY_N_ROUNDS = 1

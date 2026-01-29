@@ -14,7 +14,7 @@ from model import get_model
 
 def apply_attack(weights, attack_type):
     """Corrupts a set of model weights based on the specified attack type."""
-    if attack_type == 'none':
+    if attack_type == 'none' or attack_type == 'label_flip':
         return weights
     
     corrupted_weights = OrderedDict()
@@ -69,6 +69,12 @@ class Client:
         for _ in range(config.LOCAL_EPOCHS):
             for data, target in self.dataloader:
                 data, target = data.to(train_device), target.to(train_device)
+                
+                # --- Label Flipping Attack (Stealth) ---
+                if is_byzantine and attack_type == 'label_flip':
+                    # Shift labels by 1 (target mod 10)
+                    # This makes the model learn incorrect class mappings
+                    target = (target + 1) % 10
                 
                 optimizer.zero_grad()
                 output = model(data)

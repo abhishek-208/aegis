@@ -63,6 +63,7 @@ def fed_avg(updates):
 def aegis(updates):
     """
     Performs our Byzantine-Resilient Aegis (Aegis).
+    Upgraded to handle Sign Flip and Label Flip via Cosine Similarity.
     """
     print("    > Aggregator: Using Robust Weighted Avg (Aegis)...")
     
@@ -78,37 +79,62 @@ def aegis(updates):
         data_sizes.append(n_k)
         
     weights_matrix = torch.stack(all_flat_weights)
-    
-    # --- Step 2: Calculate Robust Center and Anomaly Scores ---
+    all_data_sizes_tensor = torch.tensor(data_sizes, device=DEVICE, dtype=torch.float32)
+
+    # --- Step 1: Volume Clipping ---
+    # Clip n_k to 2.0 * average_data_size
+    avg_data_size = torch.mean(all_data_sizes_tensor)
+    clipped_data_sizes = torch.clamp(all_data_sizes_tensor, max=2.0 * avg_data_size.item())
+
+    # --- Step 2: Calculate Robust Center and Euclidean Distances ---
     w_median = torch.median(weights_matrix, dim=0).values
-    anomaly_scores = torch.norm(weights_matrix - w_median, dim=1)
+    euclidean_distances = torch.norm(weights_matrix - w_median, dim=1)
     
-    # --- Step 3: Calculate Robust Threshold (Hard-Filtering) ---
-    s_median = torch.median(anomaly_scores)
-    s_mad = torch.median(torch.abs(anomaly_scores - s_median))
-    threshold = s_median + (RWA_MAD_THRESHOLD * s_mad)
+    # --- Step 3: Calculate Cosine Similarity & Penalty ---
+    # Cosine Sim between each client update and the median vector
+    # epsilon added to denominator to avoid division by zero if median is all zeros
+    cos_sim = torch.nn.functional.cosine_similarity(weights_matrix, w_median.unsqueeze(0), dim=1)
     
-    # --- Step 4: Filter clients and Calculate Credit Scores ---
-    approved_indices = torch.where(anomaly_scores <= threshold)[0]
+    # Penalty: 0.0 (perfect alignment) to 2.0 (opposite direction)
+    cosine_penalty = 1.0 - cos_sim
+
+    # --- Step 4: Hard Filtering (MAD + Directional) ---
+    # A. Euclidean Stats
+    s_median = torch.median(euclidean_distances)
+    s_mad = torch.median(torch.abs(euclidean_distances - s_median))
+    mad_threshold = s_median + (RWA_MAD_THRESHOLD * s_mad)
+    
+    # B. Filter Logic
+    # Reject if Distance > Threshold OR Cosine Similarity < 0 (Opposite direction)
+    # Using indices logic
+    
+    pass_euclidean = euclidean_distances <= mad_threshold
+    pass_direction = cos_sim >= 0.0 # Reject negative cosine similarity
+    
+    approved_mask = pass_euclidean & pass_direction
+    approved_indices = torch.where(approved_mask)[0]
     
     if len(approved_indices) == 0:
         print("    > Aegis: All clients discarded as outliers! Skipping round.")
         return None
         
-    print(f"    > Aegis: Approved {len(approved_indices)}/{len(updates)} clients.")
+    print(f"    > Aegis: Approved {len(approved_indices)}/{len(updates)} clients (Rejected {len(updates) - len(approved_indices)}).")
 
-    approved_scores = anomaly_scores[approved_indices]
-    approved_data_sizes = torch.tensor([data_sizes[i] for i in approved_indices], device=DEVICE)
+    # --- Step 5: Calculate Enhanced Credit Scores ---
+    approved_clipped_sizes = clipped_data_sizes[approved_indices]
+    approved_distances = euclidean_distances[approved_indices]
+    approved_cosine_penalties = cosine_penalty[approved_indices]
     approved_weights_matrix = weights_matrix[approved_indices]
 
-    # --- Step 5: Calculate "soft" credit scores for the approved clients ---
-    raw_anomaly_credit = 1.0 / (approved_scores + RWA_EPSILON)
-    raw_credits = raw_anomaly_credit * approved_data_sizes
-    total_credit = torch.sum(raw_credits)
-    final_credit_scores = (raw_credits / total_credit).unsqueeze(1)
+    # Formula: Score = Clipped_Volume / (Euclidean_Distance + (Cosine_Penalty * 10.0) + Epsilon)
+    denominator = approved_distances + (approved_cosine_penalties * 10.0) + RWA_EPSILON
+    raw_scores = approved_clipped_sizes / denominator
+    
+    total_score = torch.sum(raw_scores)
+    final_scores = (raw_scores / total_score).unsqueeze(1)
     
     # --- Step 6: Aggregate ---
-    new_flat_global_model = torch.sum(approved_weights_matrix * final_credit_scores, dim=0)
+    new_flat_global_model = torch.sum(approved_weights_matrix * final_scores, dim=0)
     new_global_model_dict = _unflatten_weights(new_flat_global_model, template_dict)
     
     return new_global_model_dict
