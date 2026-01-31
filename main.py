@@ -38,10 +38,10 @@ EXPERIMENT_CONFIGS = [
         'attack_type': 'none',
         'fraction_byzantine': 0.0,
         'color': 'g', # Green
-        'marker': 'o'
+        'marker': 'o' 
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': False,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -57,28 +57,7 @@ EXPERIMENT_CONFIGS = [
         'fraction_byzantine': config.FRACTION_BYZANTINE,
         'color': 'b', # Blue
         'marker': 's' # Square
-    },
-    
-    {
-        'run': False,  
-        'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
-        'aggregator': fed_avg,
-        'attack_type': config.ATTACK_TYPE, 
-        'fraction_byzantine': config.FRACTION_BYZANTINE,
-        'color': 'orange', 
-        'marker': 'v'      
-    },
-
-    {
-        'run': False,  # <-- Run this   experiment
-        'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
-        'aggregator': aegis,
-        'attack_type': config.ATTACK_TYPE, 
-        'fraction_byzantine': config.FRACTION_BYZANTINE,
-        'color': 'purple', 
-        'marker': 'P'       
-    },
-    
+    },    
     {
         'run': True,  
         'label': f"CWMed (With {config.ATTACK_TYPE} Attack)",

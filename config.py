@@ -7,10 +7,10 @@ import torch
 import os 
 
 # --- === Simulation Parameters === ---
-NUM_ROUNDS = 80           # Total number of federated learning rounds
-NUM_CLIENTS = 30          # Total number of clients in the pool
+NUM_ROUNDS = 30           # Total number of federated learning rounds
+NUM_CLIENTS = 20          # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 1   # Minimum clients to select each round
-MAX_CLIENTS_PER_ROUND = 26  # Maximum clients to select each round
+MAX_CLIENTS_PER_ROUND = 18  # Maximum clients to select each round
 FRACTION_BYZANTINE = 0.3
 
 # --- === Model & Data Parameters === ---
@@ -42,7 +42,7 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip'
-ATTACK_TYPE = 'label_flip' 
+ATTACK_TYPE = 'none' 
 
 # --- === Performance Optimizations === ---
 EVALUATE_EVERY_N_ROUNDS = 1
