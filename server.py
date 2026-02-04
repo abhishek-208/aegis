@@ -20,6 +20,11 @@ def client_training_wrapper(args):
     """
     # Unpack the   5th argument
     client, global_weights, is_byzantine, attack_type, device = args
+    
+    # CRITICAL: Prevent oversubscription. Each worker gets 1 thread.
+    if device == 'cpu':
+        torch.set_num_threads(1)
+        
     return client.train(global_weights, is_byzantine, attack_type, force_device=device)
 
 # --- ================================== ---

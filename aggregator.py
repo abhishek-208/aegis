@@ -87,7 +87,7 @@ def aegis(updates):
     clipped_data_sizes = torch.clamp(all_data_sizes_tensor, max=2.0 * avg_data_size.item())
 
     # --- Step 2: Calculate Robust Center and Euclidean Distances ---
-    w_median = torch.median(weights_matrix, dim=0).values
+    w_median = torch.median(weights_matrix, dim=0).values   #Coordinate wise median
     euclidean_distances = torch.norm(weights_matrix - w_median, dim=1)
     
     # --- Step 3: Calculate Cosine Similarity & Penalty ---
@@ -100,8 +100,8 @@ def aegis(updates):
 
     # --- Step 4: Hard Filtering (MAD + Directional) ---
     # A. Euclidean Stats
-    s_median = torch.median(euclidean_distances)
-    s_mad = torch.median(torch.abs(euclidean_distances - s_median))
+    s_median = torch.median(euclidean_distances)    #median distance
+    s_mad = torch.median(torch.abs(euclidean_distances - s_median))    #median absolute deviation
     mad_threshold = s_median + (RWA_MAD_THRESHOLD * s_mad)
     
     # B. Filter Logic

@@ -41,7 +41,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': False,  # <-- Set to False to skip the sign_flip test
+        'run': True,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
