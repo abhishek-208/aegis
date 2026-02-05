@@ -2,6 +2,8 @@
 Utility for plotting the results of the FL experiments.
 """
 
+import matplotlib
+matplotlib.use('Agg') # Force non-interactive backend
 import matplotlib.pyplot as plt
 import numpy as np
 import os 
@@ -59,8 +61,17 @@ def plot_results(all_results, config_module):
     for result in all_results:
         plot_label = f"{result['label']} ({result['duration']:.1f}s)"
         
+        # Determine x-axis based on actual length of history
+        # Because Early Stopping might have stopped it early
+        num_points = len(result['history'])
+        actual_rounds = np.arange(
+            config_module.EVALUATE_EVERY_N_ROUNDS, 
+            (num_points * config_module.EVALUATE_EVERY_N_ROUNDS) + 1, 
+            config_module.EVALUATE_EVERY_N_ROUNDS
+        )
+
         ax_acc.plot(
-            eval_rounds,
+            actual_rounds,
             result['history'], # 'history' is the accuracy history
             label=plot_label,
             color=result['color'],
@@ -96,8 +107,16 @@ def plot_results(all_results, config_module):
     for result in all_results:
         plot_label = f"{result['label']} ({result['duration']:.1f}s)"
 
+        # Determine x-axis based on actual length of history
+        num_points = len(result['loss_history'])
+        actual_rounds = np.arange(
+            config_module.EVALUATE_EVERY_N_ROUNDS, 
+            (num_points * config_module.EVALUATE_EVERY_N_ROUNDS) + 1, 
+            config_module.EVALUATE_EVERY_N_ROUNDS
+        )
+
         ax_loss.plot(
-            eval_rounds,
+            actual_rounds,
             result['loss_history'], # This is the   loss history
             label=plot_label,
             color=result['color'],
@@ -212,3 +231,75 @@ def plot_final_summary_bars(all_results, config_module):
     plt.show() # Show both bar charts
     
     return save_path_acc_bar, save_path_loss_bar
+
+# --- === 5. GRADIENT SCATTER PLOT === ---
+
+def plot_gradient_scatter(viz_data, round_num, config_module, exp_label):
+    """
+    Plots the PCA projection of client gradients.
+    Colors: Blue (Honest), Red (Attacker)
+    Markers: Circle (Accepted), X (Rejected)
+    """
+    import numpy as np
+    import os
+
+    coords = viz_data["coords"]         # (N, 2)
+    approved_indices = set(viz_data["approved_indices"])
+    original_indices = viz_data["original_indices"] # List of client IDs
+    byzantine_set = set(viz_data["byzantine_set"])
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Iterate through each point to plot with correct style
+    for i, client_id in enumerate(original_indices):
+        x, y = coords[i]
+        
+        # Color: Red if Byzantine (Ground Truth), Blue if Honest
+        color = 'red' if client_id in byzantine_set else 'blue'
+        
+        # Marker: Circle (o) if Approved, Cross (x) if Rejected
+        # approved_indices in stats refers to the INDEX in the updates list, not client_id
+        marker = 'o' if i in approved_indices else 'x'
+        
+        # Edge color/transparency
+        alpha = 0.8
+        
+        if marker == 'x':
+            # 'x' is an unfilled marker, edgecolors is ignored (causes warning)
+            ax.scatter(x, y, c=color, marker=marker, s=100, alpha=alpha)
+        else:
+            # 'o' is filled, we want a black outline
+            ax.scatter(x, y, c=color, marker=marker, s=100, alpha=alpha, edgecolors='black')
+        
+        # Add client ID text
+        ax.text(x, y, str(client_id), fontsize=8, ha='right')
+
+    # Legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', label='Honest (True)', markersize=10),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', label='Attacker (True)', markersize=10),
+        Line2D([0], [0], marker='o', color='gray', label='Accepted (Aggregator)', markersize=10, linestyle='None'),
+        Line2D([0], [0], marker='x', color='gray', label='Rejected (Aggregator)', markersize=10, linestyle='None'),
+    ]
+    ax.legend(handles=legend_elements, loc='upper right')
+
+    ax.set_title(f"Gradient Projection (PCA) - Round {round_num}\nExperiment: {exp_label}")
+    ax.set_xlabel("Principal Component 1")
+    ax.set_ylabel("Principal Component 2")
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+    # Save
+    scatter_dir = os.path.join(config_module.RESULTS_DIR, "ScatterPlots")
+    os.makedirs(scatter_dir, exist_ok=True)
+    
+    # Sanitize label for filename
+    safe_label = "".join(c for c in exp_label if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+    filename = f"Gradients_R{round_num}_{safe_label}.png"
+    save_path = os.path.join(scatter_dir, filename)
+    
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig) # Close to modify memory usage
+    
+    return save_path

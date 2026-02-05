@@ -32,7 +32,7 @@ import plotter
 
 EXPERIMENT_CONFIGS = [
     {
-        'run': True,  # Set to False to skip this one
+        'run': False,  # Set to False to skip this one
         'label': f"FedAvg (With no Attack)",
         'aggregator': fed_avg,
         'attack_type': 'none',
@@ -41,7 +41,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': False,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -59,7 +59,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 's' # Square
     },    
     {
-        'run': True,  
+        'run': False,  
         'label': f"CWMed (With {config.ATTACK_TYPE} Attack)",
         'aggregator': cw_med,  # <-- Use the   function
         'attack_type': config.ATTACK_TYPE,
@@ -68,7 +68,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'p'       #   marker (star)
     },
     {
-        'run': True,  
+        'run': False,  
         'label': f"Krum (With {config.ATTACK_TYPE} Attack)",
         # We use functools.partial to "pre-fill" the fraction_byzantine
         # argument that multi_krum needs.
@@ -134,6 +134,10 @@ def run_simulation(exp_config):
     accuracy_history = []
     loss_history = []
     
+    # Early Stopping Initialization
+    best_loss = float('inf')
+    patience_counter = 0
+
     for round_num in range(config.NUM_ROUNDS):
         print(f"\n    ------------------------------- Round {round_num + 1}/{config.NUM_ROUNDS} -------------------------------")
         
@@ -160,10 +164,42 @@ def run_simulation(exp_config):
             
             timing_summary["evaluation"] += (t_end_eval - t_start_eval)
             
+            
             accuracy_history.append(accuracy)
             loss_history.append(loss)
             
             print(f"\n    > EVALUATION: Global Model Loss: {loss:.4f}, Accuracy: {accuracy:.2f}% (Time: {(t_end_eval - t_start_eval):.2f}s)")
+            
+            # --- Visualization Check ---
+            should_visualize = (
+                config.VISUALIZE_GRADIENTS and 
+                (round_num + 1) % config.VISUALIZE_EVERY_N_ROUNDS == 0
+            )
+            
+            if should_visualize and "viz_data" in round_timings and round_timings["viz_data"]:
+                 # We only save the plot, we don't block
+                 save_path_viz = plotter.plot_gradient_scatter(
+                     round_timings["viz_data"], 
+                     round_num + 1, 
+                     config, 
+                     exp_config['label']
+                 )
+                 print(f"      > [Visualization] Gradient Scatter Plot saved: {save_path_viz}")
+
+            # --- Early Stopping Check ---
+            
+            # --- Early Stopping Check ---
+            if config.EARLY_STOPPING_ENABLED:
+                if loss < best_loss - config.MIN_DELTA:
+                    best_loss = loss
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                    print(f"      [Early Stopping] No improvement. Patience: {patience_counter}/{config.PATIENCE}")
+                    
+                    if patience_counter >= config.PATIENCE:
+                        print(f"\n      [Early Stopping] Patience limit reached at round {round_num + 1}. Stopping training.")
+                        break
         
     exp_end_time = time.time()
     total_duration = exp_end_time - exp_start_time

@@ -57,7 +57,7 @@ def fed_avg(updates):
         for key in client_weights:
             avg_weights[key] += client_weights[key].to(DEVICE) * weight
             
-    return avg_weights
+    return avg_weights, None # No stats for FedAvg
 
 
 def aegis(updates):
@@ -137,7 +137,14 @@ def aegis(updates):
     new_flat_global_model = torch.sum(approved_weights_matrix * final_scores, dim=0)
     new_global_model_dict = _unflatten_weights(new_flat_global_model, template_dict)
     
-    return new_global_model_dict
+    # --- Step 7: Return Stats for Visualization ---
+    # We return the original weights_matrix (on CPU if possible to save GPU mem) and approved indices
+    stats = {
+        "weights_matrix": weights_matrix.cpu().numpy(),
+        "approved_indices": approved_indices.cpu().numpy()
+    }
+    
+    return new_global_model_dict, stats
 
 def cw_med(updates):
     """

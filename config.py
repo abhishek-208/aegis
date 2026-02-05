@@ -7,7 +7,7 @@ import torch
 import os 
 
 # --- === Simulation Parameters === ---
-NUM_ROUNDS = 80           # Total number of federated learning rounds
+NUM_ROUNDS = 1000           # Total number of federated learning rounds
 NUM_CLIENTS = 40          # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 1   # Minimum clients to select each round
 MAX_CLIENTS_PER_ROUND = 35  # Maximum clients to select each round
@@ -22,11 +22,11 @@ DATA_SPLIT_TYPE = 'UNBALANCED_IID'
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 2 
 DIRICHLET_ALPHA = 0.5
-BATCH_SIZE = 32           
+BATCH_SIZE = 128           
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.001      
+LEARNING_RATE = 0.05      
 MOMENTUM = 0.8            
 
 # --- === Aegis Parameters === ---
@@ -42,7 +42,7 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip'
-ATTACK_TYPE = 'label_flip' 
+ATTACK_TYPE = 'additive_noise' 
 
 # --- === Performance Optimizations === ---
 EVALUATE_EVERY_N_ROUNDS = 1
@@ -66,5 +66,14 @@ DATALOADER_WORKERS = 0
 # Clients will train on CPU (forced in server.py) to allow parallelism.
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# --- === Early Stopping Parameters === ---
+EARLY_STOPPING_ENABLED = True
+PATIENCE = 10           # Number of rounds to wait for improvement
+MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
+
 # --- === Results Directory === ---
 RESULTS_DIR = 'Results'
+
+# --- === Visualization Parameters === ---
+VISUALIZE_GRADIENTS = True       # Master toggle for scatter plots
+VISUALIZE_EVERY_N_ROUNDS = 10    # Save scatter plot every N rounds

@@ -7,7 +7,7 @@ import torch.nn as nn
 import random
 import math
 import time
-import torch.multiprocessing as mp
+import concurrent.futures
 
 import config
 from model import get_model
@@ -55,8 +55,8 @@ class Server:
         byzantine_clients = random.sample(selected_clients, num_byzantine)
         byzantine_client_set = set(c.client_id for c in byzantine_clients)
         
-        if num_byzantine > 0:
-            print(f"    > Round Info: {len(selected_clients)} Participants, {num_byzantine} Byzantine ({attack_type})")
+        # Always print round info
+        print(f"    > Round Info: {len(selected_clients)} Participants, {num_byzantine} Byzantine ({attack_type})")
 
         # --- Step 3: Local Training ---
         t_start_train = time.time()
@@ -71,15 +71,16 @@ class Server:
         use_parallel = (config.MAX_PARALLEL_CLIENTS is not None) and (config.MAX_PARALLEL_CLIENTS > 1)
         
         if use_parallel:
-            # PARALLEL MODE: Force 'cpu' to avoid GPU thrashing/context errors
-            training_device = 'cpu'
+            # PARALLEL MODE: Use the device defined in config (likely CUDA)
+            # CAUTION: This requires sufficient VRAM.
+            training_device = self.device
             for client in selected_clients:
                 is_byz = client.client_id in byzantine_client_set
                 mp_args.append((client, global_weights_cpu, is_byz, attack_type, training_device))
             
-            # Run in Pool
-            with mp.Pool(processes=config.MAX_PARALLEL_CLIENTS) as pool:
-                updates = pool.map(client_training_wrapper, mp_args)
+            # Run in ThreadPool
+            with concurrent.futures.ThreadPoolExecutor(max_workers=config.MAX_PARALLEL_CLIENTS) as executor:
+                updates = list(executor.map(client_training_wrapper, mp_args))
                 
         else:
             # SERIAL MODE: Use the config device (likely GPU)
@@ -96,10 +97,46 @@ class Server:
         if config.DEVICE.type == 'cuda':
             torch.cuda.synchronize()
         t_end_train = time.time()
+        print(f"    > Training Time: {t_end_train - t_start_train:.2f}s")
         
         # --- Step 4: Aggregation ---
         t_start_agg = time.time()
-        new_global_weights = self.aggregator_func(updates)
+        # --- Step 4: Aggregation ---
+        t_start_agg = time.time()
+        
+        # Aggregator now returns (weights, stats) tuple
+        new_global_weights, agg_stats = self.aggregator_func(updates)
+        
+        if config.DEVICE.type == 'cuda':
+            torch.cuda.synchronize()
+        t_end_agg = time.time()
+        
+        # --- Visualization: PCA Projection ---
+        viz_data = None
+        if agg_stats:
+            try:
+                from sklearn.decomposition import PCA
+                
+                # agg_stats contains: weights_matrix (ndarray), approved_indices, original_indices
+                weights = agg_stats['weights_matrix']
+                n_samples = weights.shape[0]
+                
+                if n_samples >= 2:
+                    pca = PCA(n_components=2)
+                    coords = pca.fit_transform(weights) # Shape (N, 2)
+                    
+                    viz_data = {
+                        "coords": coords,
+                        "approved_indices": agg_stats['approved_indices'],
+                        "original_indices": [c.client_id for c in selected_clients], # Correctly derived from local variable
+                        "byzantine_set": list(byzantine_client_set)        # To know who is ACTUALLY bad
+                    }
+                else:
+                    # Not enough samples for PCA
+                    viz_data = None
+            except ImportError:
+                print("    > [Visualizer] Sklearn not found. Skipping PCA plot.")
+                pass
         if config.DEVICE.type == 'cuda':
             torch.cuda.synchronize()
         t_end_agg = time.time()
@@ -110,7 +147,8 @@ class Server:
 
         return {
             "train_time": t_end_train - t_start_train,
-            "agg_time": t_end_agg - t_start_agg
+            "agg_time": t_end_agg - t_start_agg,
+            "viz_data": viz_data
         }
 
     def evaluate(self):
