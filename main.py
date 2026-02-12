@@ -32,7 +32,7 @@ import plotter
 
 EXPERIMENT_CONFIGS = [
     {
-        'run': False,  # Set to False to skip this one
+        'run': True,  # Set to False to skip this one
         'label': f"FedAvg (With no Attack)",
         'aggregator': fed_avg,
         'attack_type': 'none',
@@ -41,7 +41,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': False,  # <-- Set to False to skip the sign_flip test
+        'run': True,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -84,7 +84,86 @@ EXPERIMENT_CONFIGS = [
         'marker': 'D'       #   marker (diamond)
     }
 
+    
 ]
+
+# --- === OVERRIDE FOR COMPARISON MODE === ---
+if config.COMPARE_AEGIS_SCENARIOS:
+    print(f"\n>>> [Config Override] Running Automated Aegis Comparison Protocol <<<")
+    EXPERIMENT_CONFIGS = [
+        # 0. Balanced IID & No Attack (Baseline)
+        {
+            'label': "Aegis (Balanced IID - No Attack)",
+            'aggregator': aegis,
+            'data_split': 'BALANCED_IID',
+            'attack_type': 'none',
+            'fraction_byzantine': 0.0,
+            'color': 'black', 'marker': 'o'
+        },
+        # 0.5. Unbalanced IID & No Attack (Baseline)
+        {
+            'label': "Aegis (Unbalanced IID - No Attack)",
+            'aggregator': aegis,
+            'data_split': 'UNBALANCED_IID',
+            'attack_type': 'none',
+            'fraction_byzantine': 0.0,
+            'color': 'black', 'marker': 'x'
+        },
+        # 1. Balanced IID & Sign Flip
+        {
+            'label': "Aegis (Balanced IID - Sign Flip)",
+            'aggregator': aegis,
+            'data_split': 'BALANCED_IID',
+            'attack_type': 'sign_flip',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': 'r', 'marker': 'o'
+        },
+        # 2. Balanced IID & Label Flip
+        {
+            'label': "Aegis (Balanced IID - Label Flip)",
+            'aggregator': aegis,
+            'data_split': 'BALANCED_IID',
+            'attack_type': 'label_flip',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': 'r', 'marker': 'x'
+        },
+        # 3. Unbalanced IID & Sign Flip
+        {
+            'label': "Aegis (Unbalanced IID - Sign Flip)",
+            'aggregator': aegis,
+            'data_split': 'UNBALANCED_IID',
+            'attack_type': 'sign_flip',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': 'b', 'marker': 'o'
+        },
+        # 4. Unbalanced IID & Label Flip
+        {
+            'label': "Aegis (Unbalanced IID - Label Flip)",
+            'aggregator': aegis,
+            'data_split': 'UNBALANCED_IID',
+            'attack_type': 'label_flip',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': 'b', 'marker': 'x'
+        },
+        # 5. Balanced IID & Additive Noise
+        {
+            'label': "Aegis (Balanced IID - Additive Noise)",
+            'aggregator': aegis,
+            'data_split': 'BALANCED_IID',
+            'attack_type': 'additive_noise',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': 'g', 'marker': 'o'
+        },
+        # 6. Unbalanced IID & Additive Noise
+        {
+            'label': "Aegis (Unbalanced IID - Additive Noise)",
+            'aggregator': aegis,
+            'data_split': 'UNBALANCED_IID',
+            'attack_type': 'additive_noise',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': 'g', 'marker': 'x'
+        }
+    ]
 
 # --- === 2. SIMULATION RUNNER === ---
 
@@ -115,7 +194,13 @@ def run_simulation(exp_config):
     t_start_data = time.time()
     
     train_dataset, test_dataset = load_data()
-    client_dataloaders = partition_data(train_dataset)
+    
+    # Check if experiment config overrides the global data split
+    split_override = exp_config.get('data_split', None)
+    
+    # Pass the override (or None) to partition_data
+    client_dataloaders = partition_data(train_dataset, split_type=split_override)
+    
     test_loader = get_test_dataloader(test_dataset)
     all_clients = [Client(cid, loader) for cid, loader in enumerate(client_dataloaders)]
     

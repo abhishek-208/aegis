@@ -7,17 +7,22 @@ import torch
 import os 
 
 # --- === Simulation Parameters === ---
-NUM_ROUNDS = 1000           # Total number of federated learning rounds
+NUM_ROUNDS = 1000          # Total number of federated learning rounds
 NUM_CLIENTS = 40          # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 1   # Minimum clients to select each round
 MAX_CLIENTS_PER_ROUND = 35  # Maximum clients to select each round
 FRACTION_BYZANTINE = 0.3
 
+# --- === Experiment Mode === ---
+# Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
+# Set to False to run the standard manual experiments list in main.py.
+COMPARE_AEGIS_SCENARIOS = True
+
 # --- === Model & Data Parameters === ---
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
-DATA_SPLIT_TYPE = 'UNBALANCED_IID'
+DATA_SPLIT_TYPE = 'BALANCED_IID'
 
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 2 
@@ -41,7 +46,7 @@ RWA_EPSILON = 1e-9
 ATTACK_NOISE_STD = 2.0  
 
 # ATTACK_TYPE:
-# Options: 'none', 'sign_flip', 'additive_noise', 'label_flip'
+# Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
 ATTACK_TYPE = 'additive_noise' 
 
 # --- === Performance Optimizations === ---

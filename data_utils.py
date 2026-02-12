@@ -44,9 +44,10 @@ def load_data():
     
     return train_dataset, test_dataset
 
-def partition_data(train_dataset):
+def partition_data(train_dataset, split_type=None):
     """
-    Partitions data among clients based on the strategy defined in config.DATA_SPLIT_TYPE.
+    Partitions data among clients based on the strategy defined in config.DATA_SPLIT_TYPE
+    (or the override `split_type` if provided).
     
     Strategies:
     1. BALANCED_IID: Randomly assigns equal number of samples to all clients.
@@ -66,15 +67,18 @@ def partition_data(train_dataset):
         'batch_size': config.BATCH_SIZE,
         'shuffle': True,
         'num_workers': config.DATALOADER_WORKERS,
-        'pin_memory': True
+        'pin_memory': (config.DEVICE.type == 'cuda')
     }
 
     client_dataloaders = []
+    
+    # Use override if provided, else use config default
+    current_split_type = split_type if split_type is not None else config.DATA_SPLIT_TYPE
 
-    if config.DATA_SPLIT_TYPE == 'BALANCED_IID':
+    if current_split_type == 'BALANCED_IID':
         # --- Strategy 1: BALANCED IID ---
         # Simply shuffle all indices and slice them equally.
-        print(f"  > Using {config.DATA_SPLIT_TYPE} split.")
+        print(f"  > Using {current_split_type} split.")
         samples_per_client = num_samples // config.NUM_CLIENTS
         indices = list(range(num_samples))
         np.random.shuffle(indices)
@@ -85,11 +89,11 @@ def partition_data(train_dataset):
             subset = Subset(train_dataset, indices[start:end])
             client_dataloaders.append(DataLoader(subset, **loader_args))
 
-    elif config.DATA_SPLIT_TYPE == 'UNBALANCED_IID':
+    elif current_split_type == 'UNBALANCED_IID':
         # --- Strategy 2: UNBALANCED IID (Dirichlet) ---
         # Generate random proportions using Dirichlet distribution.
         # Check config.DIRICHLET_ALPHA controls the degree of imbalance.
-        print(f"  > Using {config.DATA_SPLIT_TYPE} split (Alpha={config.DIRICHLET_ALPHA}).")
+        print(f"  > Using {current_split_type} split (Alpha={config.DIRICHLET_ALPHA}).")
         proportions = np.random.dirichlet(np.repeat(config.DIRICHLET_ALPHA, config.NUM_CLIENTS))
         client_sizes = (proportions * num_samples).astype(int)
         
@@ -107,11 +111,11 @@ def partition_data(train_dataset):
             client_dataloaders.append(DataLoader(subset, **loader_args))
             current_idx += size
 
-    elif config.DATA_SPLIT_TYPE == 'NON_IID':
+    elif current_split_type == 'NON_IID':
         # --- Strategy 3: NON-IID (Label Sharding) ---
         # Sorts data by label, divides into shards, and assigns specific number of shards to each client.
         # This ensures clients only see a subset of classes (e.g., only 2 classes out of 10).
-        print(f"  > Using {config.DATA_SPLIT_TYPE} split ({config.SHARDS_PER_CLIENT} shards/client).")
+        print(f"  > Using {current_split_type} split ({config.SHARDS_PER_CLIENT} shards/client).")
         
         # 1. Get targets/labels
         if hasattr(train_dataset, 'targets'):
@@ -153,5 +157,5 @@ def get_test_dataloader(test_dataset):
         batch_size=1024, 
         shuffle=False,
         num_workers=config.DATALOADER_WORKERS, 
-        pin_memory=True
+        pin_memory=(config.DEVICE.type == 'cuda')
     )

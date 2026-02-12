@@ -34,8 +34,35 @@ def apply_attack(weights, attack_type):
             corrupted_weights[key] = tensor + noise
         return corrupted_weights
         
+    elif attack_type == 'orthogonal':
+        # Orthogonal Scale Attack:
+        # Add a noise vector that is orthogonal to the current weights.
+        for key, tensor in weights.items():
+            noise = torch.randn_like(tensor, device=tensor.device)
+            
+            # Gram-Schmidt Orthogonalization: v = n - proj_u(n)
+            # proj = (n . u) / (u . u) * u
+            dot = torch.sum(noise * tensor)
+            norm_sq = torch.sum(tensor * tensor)
+            proj = (dot / (norm_sq + 1e-9)) * tensor
+            orth_noise = noise - proj
+            
+            # Scale to match the weight magnitude (Strong attack)
+            current_norm = torch.norm(tensor)
+            orth_norm = torch.norm(orth_noise)
+            if orth_norm > 1e-9:
+                orth_noise = orth_noise * (current_norm / orth_norm)
+
+            corrupted_weights[key] = tensor + orth_noise
+        return corrupted_weights
+
     else:
-        raise ValueError(f"Unknown attack type: {attack_type}")
+        # For volume_spam, we don't change weights here (except implicit label_flip in train)
+        if attack_type == 'volume_spam':
+            return weights
+        # Only raise error if truly unknown
+        # raise ValueError(f"Unknown attack type: {attack_type}")
+        return weights
 
 # --- === Client Class Definition === ---
 
@@ -70,10 +97,10 @@ class Client:
             for data, target in self.dataloader:
                 data, target = data.to(train_device), target.to(train_device)
                 
-                # --- Label Flipping Attack (Stealth) ---
-                if is_byzantine and attack_type == 'label_flip':
+                # --- Label Flipping Logic ---
+                # Used for 'label_flip' AND 'volume_spam' (Volume spam is just label flip + huge count)
+                if is_byzantine and (attack_type == 'label_flip' or attack_type == 'volume_spam'):
                     # Shift labels by 1 (target mod 10)
-                    # This makes the model learn incorrect class mappings
                     target = (target + 1) % 10
                 
                 optimizer.zero_grad()
@@ -88,6 +115,13 @@ class Client:
         # --- Step 3: Apply Attack (if Byzantine) ---
         if is_byzantine:
             corrupted_weights = apply_attack(local_weights, attack_type)
+            
+            # --- Volume Spam Logic ---
+            if attack_type == 'volume_spam':
+                # Report a massively inflated data size (1 Billion)
+                # Aegis clips this to 2.0 * avg, maximizing our weight.
+                return corrupted_weights, 1_000_000_000
+            
             return corrupted_weights, len(self.dataloader.dataset)
         else:
             return local_weights, len(self.dataloader.dataset)
