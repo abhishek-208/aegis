@@ -32,7 +32,7 @@ import plotter
 
 EXPERIMENT_CONFIGS = [
     {
-        'run': True,  # Set to False to skip this one
+        'run': False, # Set to False to skip this one
         'label': f"FedAvg (With no Attack)",
         'aggregator': fed_avg,
         'attack_type': 'none',
@@ -41,7 +41,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': False,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -50,7 +50,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'x'
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': False,  # <-- Set to False to skip the sign_flip test
         'label': f"Aegis (With {config.ATTACK_TYPE} Attack)",
         'aggregator': aegis,
         'attack_type': config.ATTACK_TYPE,
@@ -59,7 +59,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 's' # Square
     },    
     {
-        'run': False,  
+        'run': True,  
         'label': f"CWMed (With {config.ATTACK_TYPE} Attack)",
         'aggregator': cw_med,  # <-- Use the   function
         'attack_type': config.ATTACK_TYPE,
@@ -232,6 +232,11 @@ def run_simulation(exp_config):
             attack_type=exp_config['attack_type'],
             fraction_byzantine=exp_config['fraction_byzantine']
         )
+        
+        # --- Check for early stop signal (e.g. Privacy Budget Exhausted) ---
+        if round_timings.get("stop_training", False):
+            print(f"\n    > [Main] Received stop signal from Server (Round {round_num + 1}). Terminating experiment early.")
+            break
         
         # Add round timings to summary
         timing_summary["client_training"] += round_timings["train_time"]

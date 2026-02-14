@@ -65,7 +65,7 @@ def aegis(updates):
     Performs our Byzantine-Resilient Aegis (Aegis).
     Upgraded to handle Sign Flip and Label Flip via Cosine Similarity.
     """
-    print("    > Aggregator: Using Robust Weighted Avg (Aegis)...")
+    print("    > Aggregator: Aegis...")
     
     if not updates:
         return OrderedDict()
@@ -147,9 +147,6 @@ def aegis(updates):
     return new_global_model_dict, stats
 
 def cw_med(updates):
-    """
-    Coordinate-wise median aggregator.
-    
     print("    > Aggregator: Using Coordinate-wise Median (CWMed)...")
 
     if not updates:
@@ -170,8 +167,10 @@ def cw_med(updates):
 
     # Unflatten and return
     new_global_model_dict = _unflatten_weights(w_median, template_dict)
-    return new_global_model_dict
-    """
+    
+    # CWMed does not return stats for viz currently
+    return new_global_model_dict, None 
+
 
 def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
     """

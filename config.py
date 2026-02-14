@@ -16,13 +16,13 @@ FRACTION_BYZANTINE = 0.3
 # --- === Experiment Mode === ---
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
 # Set to False to run the standard manual experiments list in main.py.
-COMPARE_AEGIS_SCENARIOS = True
+COMPARE_AEGIS_SCENARIOS = False
 
 # --- === Model & Data Parameters === ---
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
-DATA_SPLIT_TYPE = 'BALANCED_IID'
+DATA_SPLIT_TYPE = 'UNBALANCED_IID'
 
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 2 
@@ -47,7 +47,7 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
-ATTACK_TYPE = 'additive_noise' 
+ATTACK_TYPE = 'orthogonal' 
 
 # --- === Performance Optimizations === ---
 EVALUATE_EVERY_N_ROUNDS = 1
@@ -58,7 +58,7 @@ EVALUATE_EVERY_N_ROUNDS = 1
 # How many clients train simultaneously. 
 #.
 # If None, it uses all available cores.
-MAX_PARALLEL_CLIENTS = 10 
+MAX_PARALLEL_CLIENTS = 20 
 
 # 2. DATALOADER_WORKERS:
 # How many subprocesses each DataLoader uses to load data.
@@ -80,5 +80,13 @@ MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
 RESULTS_DIR = 'Results'
 
 # --- === Visualization Parameters === ---
-VISUALIZE_GRADIENTS = True       # Master toggle for scatter plots
+VISUALIZE_GRADIENTS = False       # Master toggle for scatter plots
 VISUALIZE_EVERY_N_ROUNDS = 10    # Save scatter plot every N rounds
+
+# --- === Differential Privacy Parameters === ---
+DP_ENABLED = True
+DP_MODE = 'local'           # 'central' or 'local'
+DP_CLIP_NORM = 1.0          # Max L2 norm for client updates
+DP_NOISE_MULTIPLIER = 0.5   # Noise multiplier (sigma)
+DP_TARGET_EPSILON = 10.0    # Privacy budget
+DP_DELTA = 1e-5             # Privacy failure probability

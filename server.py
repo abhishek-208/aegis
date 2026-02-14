@@ -11,6 +11,7 @@ import concurrent.futures
 
 import config
 from model import get_model
+from privacy_accountant import PrivacyAccountant
 
 # --- === HELPER FOR MULTIPROCESSING === ---
 def client_training_wrapper(args):
@@ -35,6 +36,19 @@ class Server:
         self.global_model = get_model().to(self.device)
         self.aggregator_func = aggregator_func
         self.test_loader = test_loader
+        
+        # --- Differential Privacy Accountant ---
+        if config.DP_ENABLED:
+            # Conservative sample rate (q) = Max possible clients / Total clients
+            # This accounts for the worst-case privacy loss per step.
+            q = config.MAX_CLIENTS_PER_ROUND / config.NUM_CLIENTS
+            self.accountant = PrivacyAccountant(
+                noise_multiplier=config.DP_NOISE_MULTIPLIER,
+                sample_rate=q,
+                delta=config.DP_DELTA
+            )
+        else:
+            self.accountant = None
 
     def select_clients(self, all_clients):
         num_to_select = random.randint(
@@ -105,7 +119,14 @@ class Server:
         t_start_agg = time.time()
         
         # Aggregator now returns (weights, stats) tuple
-        new_global_weights, agg_stats = self.aggregator_func(updates)
+        result = self.aggregator_func(updates)
+        
+        if result is None:
+            new_global_weights, agg_stats = None, None
+            print("    > Server: Aggregator returned None (Round Skipped).")
+        else:
+            new_global_weights, agg_stats = result
+
         
         if config.DEVICE.type == 'cuda':
             torch.cuda.synchronize()
@@ -143,12 +164,54 @@ class Server:
         
         # --- Step 5: Update Global Model ---
         if new_global_weights:
+            # --- Differential Privacy: Add Noise to Aggregated Update ---
+            if config.DP_ENABLED and getattr(config, 'DP_MODE', 'central') == 'central':
+                # noise_std = (C * sigma) / N
+                # We normalize by N because we are adding noise to the AVERAGE, not the SUM.
+                # Use len(selected_clients) as the sensitivity denominator (assuming all participated)
+                n_participants = len(selected_clients)
+                noise_std = (config.DP_CLIP_NORM * config.DP_NOISE_MULTIPLIER) / n_participants
+                
+                print(f"    > DP (Central): Injecting noise (std={noise_std:.6f}) to global model...")
+                
+                for key in new_global_weights:
+                    # Generate noise on the same device as the weights
+                    noise = torch.normal(
+                        mean=0.0, 
+                        std=noise_std, 
+                        size=new_global_weights[key].shape, 
+                        device=new_global_weights[key].device
+                    )
+                    new_global_weights[key] += noise
+            
+            # If DP_MODE is 'local', noise was already added by clients.
+
+
             self.global_model.load_state_dict(new_global_weights)
 
+            # --- DP Accounting ---
+            if config.DP_ENABLED and self.accountant:
+                self.accountant.step()
+                eps = self.accountant.get_epsilon()
+                print(f"    > DP: Spent Privacy Budget (Epsilon): {eps:.4f} / {config.DP_TARGET_EPSILON}")
+                
+                if eps >= config.DP_TARGET_EPSILON:
+                    print("    > DP: Privacy Budget Exhausted! Stopping training.")
+                    # Return a signal to stop? Or raise StopIteration?
+                    # For now, we will rely on main loop checking or just let it continue but warn (soft stop)
+                    # Ideally, we should modify the return dict to signal 'stop'
+                    return {
+                        "train_time": t_end_train - t_start_train,
+                        "agg_time": t_end_agg - t_start_agg,
+                        "viz_data": viz_data,
+                        "stop_training": True # New flag
+                    }
+        
         return {
             "train_time": t_end_train - t_start_train,
             "agg_time": t_end_agg - t_start_agg,
-            "viz_data": viz_data
+            "viz_data": viz_data,
+            "stop_training": False
         }
 
     def evaluate(self):

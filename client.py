@@ -64,6 +64,54 @@ def apply_attack(weights, attack_type):
         # raise ValueError(f"Unknown attack type: {attack_type}")
         return weights
 
+# --- === Differential Privacy Helpers === ---
+
+def _flatten_weights(weights_dict):
+    """Flattens a model's state_dict into a single 1D tensor."""
+    return torch.cat([p.flatten() for p in weights_dict.values()])
+
+def _unflatten_weights(flat_tensor, template_dict):
+    """Un-flattens a 1D tensor back into a model's state_dict."""
+    new_dict = OrderedDict()
+    current_idx = 0
+    for key, tensor in template_dict.items():
+        num_elements = tensor.numel()
+        shape = tensor.shape
+        new_dict[key] = flat_tensor[current_idx : current_idx + num_elements].reshape(shape)
+        current_idx += num_elements
+    return new_dict
+
+def clip_updates(new_weights, global_weights):
+    """
+    Clips the update (new_weights - global_weights) to a maximum L2 norm defined in config.
+    Returns the clipped new_weights.
+    """
+    # 1. Flatten both
+    new_flat = _flatten_weights(new_weights)
+    global_flat = _flatten_weights(global_weights)
+    
+    # 2. Ensure they are on the same device (CPU recommended for this step)
+    if new_flat.device != global_flat.device:
+        global_flat = global_flat.to(new_flat.device)
+        
+    # 3. Calculate Update Vector
+    update_vector = new_flat - global_flat
+    
+    # 4. Calculate Norm
+    total_norm = torch.norm(update_vector)
+    
+    # 5. Clip if necessary
+    if total_norm > config.DP_CLIP_NORM:
+        scaling_factor = config.DP_CLIP_NORM / (total_norm + 1e-9)
+        update_vector = update_vector * scaling_factor
+        
+        # 6. Reconstruct new weights
+        clipped_flat = global_flat + update_vector
+        return _unflatten_weights(clipped_flat, global_weights)
+    
+    return new_weights
+
+
 # --- === Client Class Definition === ---
 
 class Client:
@@ -122,6 +170,40 @@ class Client:
                 # Aegis clips this to 2.0 * avg, maximizing our weight.
                 return corrupted_weights, 1_000_000_000
             
-            return corrupted_weights, len(self.dataloader.dataset)
+            final_weights = corrupted_weights
         else:
-            return local_weights, len(self.dataloader.dataset)
+            final_weights = local_weights
+            
+        # --- Step 4: Differential Privacy Clipping ---
+        if config.DP_ENABLED:
+            # Clip the update (relative to global_model)
+            # Note: We pass global_weights_cpu because local_weights are on CPU
+            # global_model_state_dict passed to train() might be on GPU or CPU. 
+            # We ensure consistency inside clip_updates.
+            
+            # Make sure global reference is on CPU for the math
+            global_cpu = {k: v.cpu() for k, v in global_model_state_dict.items()}
+            final_weights = clip_updates(final_weights, global_cpu)
+            
+            # --- Local DP: Add Noise HERE if enabled ---
+            if getattr(config, 'DP_MODE', 'central') == 'local':
+                 # Local DP Noise
+                 # Sensitivity = 2 * C (since we clipped update to C, max distance is 2C? 
+                 # Actually, commonly we just clip norm to C, so sensitivity is C for sum, but for local release...
+                 # Standard Local DP (Gaussian): sigma = sqrt(2 * log(1.25/delta)) / epsilon * Sensitivity
+                 # Here we use the config parameters. 
+                 # For simplicity, we use the same DP_NOISE_MULTIPLIER as "sigma relative to C".
+                 
+                 noise_std = config.DP_CLIP_NORM * config.DP_NOISE_MULTIPLIER
+                 
+                 for key in final_weights:
+                     noise = torch.normal(
+                         mean=0.0,
+                         std=noise_std,
+                         size=final_weights[key].shape,
+                         device=final_weights[key].device
+                     )
+                     final_weights[key] += noise
+
+            
+        return final_weights, len(self.dataloader.dataset)
