@@ -22,7 +22,7 @@ COMPARE_AEGIS_SCENARIOS = False
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
-DATA_SPLIT_TYPE = 'UNBALANCED_IID'
+DATA_SPLIT_TYPE = 'BALANCED_IID'
 
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 2 
@@ -31,7 +31,7 @@ BATCH_SIZE = 128
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.05      
+LEARNING_RATE = 0.001      
 MOMENTUM = 0.8            
 
 # --- === Aegis Parameters === ---
@@ -47,7 +47,7 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
-ATTACK_TYPE = 'orthogonal' 
+ATTACK_TYPE = 'sign_flip' 
 
 # --- === Performance Optimizations === ---
 EVALUATE_EVERY_N_ROUNDS = 1
@@ -84,9 +84,9 @@ VISUALIZE_GRADIENTS = False       # Master toggle for scatter plots
 VISUALIZE_EVERY_N_ROUNDS = 10    # Save scatter plot every N rounds
 
 # --- === Differential Privacy Parameters === ---
-DP_ENABLED = True
+DP_ENABLED = False
 DP_MODE = 'local'           # 'central' or 'local'
 DP_CLIP_NORM = 1.0          # Max L2 norm for client updates
 DP_NOISE_MULTIPLIER = 0.5   # Noise multiplier (sigma)
-DP_TARGET_EPSILON = 10.0    # Privacy budget
+DP_TARGET_EPSILON = 10000.0    # Privacy budget
 DP_DELTA = 1e-5             # Privacy failure probability
