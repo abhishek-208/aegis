@@ -65,7 +65,7 @@ def aegis(updates):
     Performs our Byzantine-Resilient Aegis (Aegis).
     Upgraded to handle Sign Flip and Label Flip via Cosine Similarity.
     """
-    print("    > Aggregator: Using Robust Weighted Avg (Aegis)...")
+    print("    > Aggregator: Aegis...")
     
     if not updates:
         return OrderedDict()
@@ -86,24 +86,41 @@ def aegis(updates):
     avg_data_size = torch.mean(all_data_sizes_tensor)
     clipped_data_sizes = torch.clamp(all_data_sizes_tensor, max=2.0 * avg_data_size.item())
 
-    # --- Step 2: Calculate Robust Center and Euclidean Distances ---
-    w_median = torch.median(weights_matrix, dim=0).values   #Coordinate wise median
-    euclidean_distances = torch.norm(weights_matrix - w_median, dim=1)
+    # --- NEW Step 1.5: Compute Deltas (Updates) ---
+    # Aegis works best on gradient updates, not raw weights (especially with DP clipping).
+    # We subtract the template_weights (global model from start of round) from each client's weights.
     
-    # --- Step 3: Calculate Cosine Similarity & Penalty ---
-    # Cosine Sim between each client update and the median vector
-    # epsilon added to denominator to avoid division by zero if median is all zeros
-    cos_sim = torch.nn.functional.cosine_similarity(weights_matrix, w_median.unsqueeze(0), dim=1)
+    # 1. Flatten the template/global model
+    flat_global = _flatten_weights(template_dict)
     
+    # 2. Compute Deltas: delta_i = w_i - w_global
+    # shape: (n_clients, dim)
+    deltas_matrix = weights_matrix - flat_global.unsqueeze(0)
+
+    # --- Step 2: Calculate Robust Center and Euclidean Distances (ON DELTAS) ---
+    # Use deltas for median computation
+    d_median = torch.median(deltas_matrix, dim=0).values   # Coordinate wise median of updates
+    
+    # Euclidean distance of each client's UPDATE from the median UPDATE
+    euclidean_distances = torch.norm(deltas_matrix - d_median, dim=1)
+    
+    # --- Step 3: Calculate Cosine Similarity & Penalty (ON DELTAS) ---
+    # Cosine Sim between each client UPDATE and the median UPDATE
+    cos_sim = torch.nn.functional.cosine_similarity(deltas_matrix, d_median.unsqueeze(0), dim=1)
+    
+
+
     # Penalty: 0.0 (perfect alignment) to 2.0 (opposite direction)
     cosine_penalty = 1.0 - cos_sim
 
     # --- Step 4: Hard Filtering (MAD + Directional) ---
     # A. Euclidean Stats
-    s_median = torch.median(euclidean_distances)    #median distance
-    s_mad = torch.median(torch.abs(euclidean_distances - s_median))    #median absolute deviation
+    s_median = torch.median(euclidean_distances)    # median distance
+    s_mad = torch.median(torch.abs(euclidean_distances - s_median))    # median absolute deviation
     mad_threshold = s_median + (RWA_MAD_THRESHOLD * s_mad)
     
+
+
     # B. Filter Logic
     # Reject if Distance > Threshold OR Cosine Similarity < 0 (Opposite direction)
     # Using indices logic
@@ -124,6 +141,8 @@ def aegis(updates):
     approved_clipped_sizes = clipped_data_sizes[approved_indices]
     approved_distances = euclidean_distances[approved_indices]
     approved_cosine_penalties = cosine_penalty[approved_indices]
+    # NOTE: We still avg the WEIGHTS, not the deltas, to reconstruct the model.
+    # But we use scores derived from deltas.
     approved_weights_matrix = weights_matrix[approved_indices]
 
     # Formula: Score = Clipped_Volume / (Euclidean_Distance + (Cosine_Penalty * 10.0) + Epsilon)
@@ -134,6 +153,7 @@ def aegis(updates):
     final_scores = (raw_scores / total_score).unsqueeze(1)
     
     # --- Step 6: Aggregate ---
+    # We aggregate the WEIGHTS using the scores computed from DELTAS.
     new_flat_global_model = torch.sum(approved_weights_matrix * final_scores, dim=0)
     new_global_model_dict = _unflatten_weights(new_flat_global_model, template_dict)
     
@@ -147,9 +167,6 @@ def aegis(updates):
     return new_global_model_dict, stats
 
 def cw_med(updates):
-    """
-    Coordinate-wise median aggregator.
-    
     print("    > Aggregator: Using Coordinate-wise Median (CWMed)...")
 
     if not updates:
@@ -170,8 +187,10 @@ def cw_med(updates):
 
     # Unflatten and return
     new_global_model_dict = _unflatten_weights(w_median, template_dict)
-    return new_global_model_dict
-    """
+    
+    # CWMed does not return stats for viz currently
+    return new_global_model_dict, None 
+
 
 def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
     """

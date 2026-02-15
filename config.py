@@ -16,7 +16,7 @@ FRACTION_BYZANTINE = 0.3
 # --- === Experiment Mode === ---
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
 # Set to False to run the standard manual experiments list in main.py.
-COMPARE_AEGIS_SCENARIOS = True
+COMPARE_AEGIS_SCENARIOS = False
 
 # --- === Model & Data Parameters === ---
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
@@ -31,7 +31,7 @@ BATCH_SIZE = 128
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.05      
+LEARNING_RATE = 0.001      
 MOMENTUM = 0.8            
 
 # --- === Aegis Parameters === ---
@@ -47,7 +47,7 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
-ATTACK_TYPE = 'additive_noise' 
+ATTACK_TYPE = 'sign_flip' 
 
 # --- === Performance Optimizations === ---
 EVALUATE_EVERY_N_ROUNDS = 1
@@ -58,7 +58,7 @@ EVALUATE_EVERY_N_ROUNDS = 1
 # How many clients train simultaneously. 
 #.
 # If None, it uses all available cores.
-MAX_PARALLEL_CLIENTS = 10 
+MAX_PARALLEL_CLIENTS = 20 
 
 # 2. DATALOADER_WORKERS:
 # How many subprocesses each DataLoader uses to load data.
@@ -80,5 +80,6 @@ MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
 RESULTS_DIR = 'Results'
 
 # --- === Visualization Parameters === ---
-VISUALIZE_GRADIENTS = True       # Master toggle for scatter plots
+VISUALIZE_GRADIENTS = False       # Master toggle for scatter plots
 VISUALIZE_EVERY_N_ROUNDS = 10    # Save scatter plot every N rounds
+
