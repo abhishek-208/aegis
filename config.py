@@ -39,6 +39,13 @@ MOMENTUM = 0.8
 RWA_MAD_THRESHOLD = 3.0
 RWA_EPSILON = 1e-9
 
+REPUTATION_ALPHA = 0.7       # Weight for old reputation (0.7 * old + 0.3 * new)
+REPUTATION_BAN_THRESHOLD = 0.15 # Score below which a client is banned forever
+REPUTATION_GRACE_PERIOD = 10    # No bans in the first N rounds
+REJECTION_PENALTY_SCORE = 0.1   # Score given to Aegis-rejected clients (not 0.0)
+
+
+
 # --- === Attack Parameters === ---
 # ATTACK_NOISE_STD:
 # For Mean Shift (additive_noise), this is the magnitude of the shift.
@@ -47,7 +54,19 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
-ATTACK_TYPE = 'sign_flip' 
+ATTACK_TYPE = 'additive_noise' 
+ATTACK_PROBABILITY = 1    # Probability that a traitor attacks in a given round
+
+# --- === Attack Timeline Parameters === ---
+# Random Window Logic:
+# Each traitor picks a start round [0, NUM_ROUNDS - MIN_DURATION]
+# And a duration [MIN_DURATION, MAX_DURATION]
+ATTACK_WINDOW_MIN_DURATION = 10
+ATTACK_WINDOW_MAX_DURATION = 50
+ATTACK_WINDOW_MAX_START_ROUND = 40 # 80% of attacks in first ~20% of convergence rounds
+
+
+
 
 # --- === Performance Optimizations === ---
 EVALUATE_EVERY_N_ROUNDS = 1

@@ -12,7 +12,7 @@ import torch
 import copy
 import math  # <-- ADDED for math.floor
 from collections import OrderedDict
-from config import DEVICE, RWA_MAD_THRESHOLD, RWA_EPSILON
+from config import DEVICE, RWA_MAD_THRESHOLD, RWA_EPSILON, REJECTION_PENALTY_SCORE
 
 # --- === HELPER FUNCTIONS FOR Aegis/Krum/CWMed === ---
 
@@ -157,11 +157,27 @@ def aegis(updates):
     new_flat_global_model = torch.sum(approved_weights_matrix * final_scores, dim=0)
     new_global_model_dict = _unflatten_weights(new_flat_global_model, template_dict)
     
-    # --- Step 7: Return Stats for Visualization ---
+    # --- Step 7: Return Stats for Visualization and Reputation ---
     # We return the original weights_matrix (on CPU if possible to save GPU mem) and approved indices
+    
+    # Create list of raw scores for ALL clients
+    # Rejected clients get a penalty score (not 0.0) so a single rejection doesn't permanently ban
+    full_raw_scores = [REJECTION_PENALTY_SCORE] * len(updates)
+    
+    # approved_indices contains indices of approved clients in the original 'updates' list
+    # raw_scores contains the scores for these approved clients
+    
+    # Move raw_scores to CPU list
+    raw_scores_cpu = raw_scores.detach().cpu().tolist()
+    approved_indices_cpu = approved_indices.detach().cpu().tolist()
+    
+    for i, original_idx in enumerate(approved_indices_cpu):
+        full_raw_scores[original_idx] = raw_scores_cpu[i]
+        
     stats = {
         "weights_matrix": weights_matrix.cpu().numpy(),
-        "approved_indices": approved_indices.cpu().numpy()
+        "approved_indices": approved_indices.cpu().numpy(),
+        "raw_scores": full_raw_scores # List of float scores, aligned with 'updates'
     }
     
     return new_global_model_dict, stats

@@ -32,7 +32,7 @@ import plotter
 
 EXPERIMENT_CONFIGS = [
     {
-        'run': True,  # Set to False to skip this one
+        'run': False,  # Set to False to skip this one
         'label': f"FedAvg (With no Attack)",
         'aggregator': fed_avg,
         'attack_type': 'none',
@@ -41,7 +41,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': False,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -230,7 +230,8 @@ def run_simulation(exp_config):
         round_timings = server.run_round(
             all_clients=all_clients,
             attack_type=exp_config['attack_type'],
-            fraction_byzantine=exp_config['fraction_byzantine']
+            fraction_byzantine=exp_config['fraction_byzantine'],
+            round_num=round_num # Pass the current round number for time-window logic
         )
         
         # Add round timings to summary
