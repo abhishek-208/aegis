@@ -73,6 +73,18 @@ class Client:
         self.client_id = client_id
         self.dataloader = dataloader
         self.device = config.DEVICE
+        
+        # --- Model Reuse Optimization ---
+        # Create the model ONCE and reuse it across rounds.
+        # This avoids the overhead of re-creating the model every round.
+        self._model = get_model().to(self.device)
+        self._criterion = nn.CrossEntropyLoss()
+        self._optimizer = optim.SGD(
+            self._model.parameters(), 
+            lr=config.LEARNING_RATE, 
+            momentum=config.MOMENTUM
+        )
+        self._current_device = self.device  # Track which device the model is on
 
     def train(self, global_model_state_dict, is_byzantine=False, attack_type='none', force_device=None):
         """Performs one round of local training."""
@@ -80,16 +92,24 @@ class Client:
         # Determine which device to use for this specific training run
         train_device = force_device if force_device else self.device
         
-        # --- Step 1: Setup ---
-        model = get_model().to(train_device)
+        # --- Step 1: Setup (Reuse cached model) ---
+        # Only move model to a different device if needed
+        if train_device != self._current_device:
+            self._model = self._model.to(train_device)
+            self._optimizer = optim.SGD(
+                self._model.parameters(), 
+                lr=config.LEARNING_RATE, 
+                momentum=config.MOMENTUM
+            )
+            self._current_device = train_device
+        
+        model = self._model
         model.load_state_dict(global_model_state_dict)
         
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(
-            model.parameters(), 
-            lr=config.LEARNING_RATE, 
-            momentum=config.MOMENTUM
-        )
+        criterion = self._criterion
+        optimizer = self._optimizer
+        # Reset optimizer state for fresh training each round
+        optimizer.zero_grad(set_to_none=True)
         
         # --- Step 2: Local Training ---
         model.train()

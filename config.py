@@ -8,10 +8,10 @@ import os
 
 # --- === Simulation Parameters === ---
 NUM_ROUNDS = 1000          # Total number of federated learning rounds
-NUM_CLIENTS = 40          # Total number of clients in the pool
-MIN_CLIENTS_PER_ROUND = 1   # Minimum clients to select each round
-MAX_CLIENTS_PER_ROUND = 35  # Maximum clients to select each round
-FRACTION_BYZANTINE = 0.3
+NUM_CLIENTS = 50          # Total number of clients in the pool
+MIN_CLIENTS_PER_ROUND = 5   # Minimum clients to select each round
+MAX_CLIENTS_PER_ROUND = 45  # Maximum clients to select each round
+FRACTION_BYZANTINE = 0.2
 
 # --- === Experiment Mode === ---
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
@@ -25,13 +25,13 @@ DATASET_NAME = 'CIFAR10'
 DATA_SPLIT_TYPE = 'BALANCED_IID'
 
 # For NON_IID: Number of classes/shards per client
-SHARDS_PER_CLIENT = 2 
-DIRICHLET_ALPHA = 0.5
-BATCH_SIZE = 128           
+SHARDS_PER_CLIENT = 2 # Number of classes/shards per client
+DIRICHLET_ALPHA = 0.5   # Controls the non-IIDness of the data
+BATCH_SIZE = 128           # Batch size for training
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.001      
+LEARNING_RATE = 0.01      
 MOMENTUM = 0.8            
 
 # --- === Aegis Parameters === ---
@@ -39,6 +39,7 @@ MOMENTUM = 0.8
 RWA_MAD_THRESHOLD = 3.0
 RWA_EPSILON = 1e-9
 
+# --- === Reputation Parameters === ---
 REPUTATION_ALPHA = 0.7       # Weight for old reputation (0.7 * old + 0.3 * new)
 REPUTATION_BAN_THRESHOLD = 0.15 # Score below which a client is banned forever
 REPUTATION_GRACE_PERIOD = 10    # No bans in the first N rounds
@@ -61,15 +62,18 @@ ATTACK_PROBABILITY = 1    # Probability that a traitor attacks in a given round
 # Random Window Logic:
 # Each traitor picks a start round [0, NUM_ROUNDS - MIN_DURATION]
 # And a duration [MIN_DURATION, MAX_DURATION]
-ATTACK_WINDOW_MIN_DURATION = 10
-ATTACK_WINDOW_MAX_DURATION = 50
-ATTACK_WINDOW_MAX_START_ROUND = 40 # 80% of attacks in first ~20% of convergence rounds
+ATTACK_WINDOW_MIN_DURATION = 10     # Minimum attack window length
+ATTACK_WINDOW_MAX_DURATION = 50     # Maximum attack window length
+
+EXPECTED_CONVERGENCE_ROUNDS = 200   # Estimated rounds for model to converge
+ATTACK_DEADLINE_PERCENT = 0.40      # Attacks must START within this % of convergence
+ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)  # = 80
 
 
 
 
 # --- === Performance Optimizations === ---
-EVALUATE_EVERY_N_ROUNDS = 1
+EVALUATE_EVERY_N_ROUNDS = 1 
 
 # --- MULTIPROCESSING CONTROL (Decoupled) ---
 

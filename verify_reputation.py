@@ -19,7 +19,7 @@ config.ATTACK_PROBABILITY = 1.0
 # Verify Windows
 config.ATTACK_WINDOW_MIN_DURATION = 3
 config.ATTACK_WINDOW_MAX_DURATION = 8
-config.ATTACK_WINDOW_MAX_START_ROUND = 5 # Force early attacks
+config.ATTACK_DEADLINE_ROUND = 5 # Force early attacks
 config.REPUTATION_GRACE_PERIOD = 5       # Short grace period for testing
 
 def verify_reputation():

@@ -8,6 +8,70 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os 
 import config as config # Import config to use its values
+from matplotlib.patches import Patch
+
+def _add_attack_shading(ax, all_results, config_module):
+    """
+    Adds vertical red shading bands to the plot based on attack intensity.
+    Darker red = more attackers that round. Only shades if attack_intensity > 0.
+    Uses the FIRST result that has a non-zero attack to determine shading.
+    """
+    MAX_ALPHA = 0.35  # Maximum opacity for the shading
+    
+    for result in all_results:
+        intensities = result.get('attack_intensity', [])
+        if not intensities or max(intensities) == 0:
+            continue
+        
+        # We found a result with attacks — use it for shading
+        for round_idx, intensity in enumerate(intensities):
+            if intensity > 0:
+                round_x = round_idx + 1  # Rounds are 1-indexed
+                alpha = intensity * MAX_ALPHA  # Scale alpha by attack fraction
+                ax.axvspan(
+                    round_x - 0.5, round_x + 0.5,
+                    color='red', alpha=alpha, linewidth=0
+                )
+        
+        # Add legend entry for the shading
+        shading_patch = Patch(
+            facecolor='red', alpha=MAX_ALPHA * 0.5,
+            label=f'Attack Intensity (max {max(intensities)*100:.0f}% Byzantine)'
+        )
+        handles, labels = ax.get_legend_handles_labels()
+        handles.append(shading_patch)
+        ax.legend(handles=handles, loc='lower right', fontsize=10)
+        break  # Only shade once (all experiments share the same attack pattern)
+
+def _add_participant_bars(ax, all_results):
+    """
+    Adds semi-transparent bars on a twin y-axis showing number of 
+    participants per round. Uses the FIRST result with participant data.
+    """
+    for result in all_results:
+        counts = result.get('participant_counts', [])
+        if not counts:
+            continue
+        
+        ax2 = ax.twinx()
+        rounds = np.arange(1, len(counts) + 1)
+        
+        ax2.bar(
+            rounds, counts,
+            color='gray', alpha=0.15, width=1.0,
+            label='Participants/Round', zorder=0
+        )
+        ax2.set_ylabel('Participants per Round', fontsize=10, color='gray')
+        ax2.tick_params(axis='y', labelcolor='gray', labelsize=9)
+        ax2.set_ylim(0, max(counts) * 2.5)  # Keep bars short (bottom portion)
+        
+        # Add to legend
+        handles, labels = ax.get_legend_handles_labels()
+        bar_patch = Patch(facecolor='gray', alpha=0.3, label='Participants/Round')
+        handles.append(bar_patch)
+        ax.legend(handles=handles, loc='lower right', fontsize=10)
+        
+        break  # Only use first result
 
 def plot_results(all_results, config_module):
     """
@@ -81,6 +145,8 @@ def plot_results(all_results, config_module):
         )
     
     ax_acc.legend(loc='lower right', fontsize=10)
+    _add_attack_shading(ax_acc, all_results, config_module)
+    _add_participant_bars(ax_acc, all_results)
     ax_acc.text(
         0.02, 0.98, param_text, 
         transform=ax_acc.transAxes, 
@@ -126,6 +192,8 @@ def plot_results(all_results, config_module):
         )
     
     ax_loss.legend(loc='upper right', fontsize=10)
+    _add_attack_shading(ax_loss, all_results, config_module)
+    _add_participant_bars(ax_loss, all_results)
     ax_loss.text(
         0.02, 0.98, param_text, 
         transform=ax_loss.transAxes, 

@@ -54,7 +54,7 @@ class Server:
         for client_id in self.fixed_byzantine_indices:
             # Ensure valid range
             limit_from_total = max(0, config.NUM_ROUNDS - config.ATTACK_WINDOW_MIN_DURATION)
-            actual_max_start = min(limit_from_total, config.ATTACK_WINDOW_MAX_START_ROUND)
+            actual_max_start = min(limit_from_total, config.ATTACK_DEADLINE_ROUND)
             
             # Beta distribution biases ~80% of start rounds into early rounds
             # betavariate(2, 5) has mean ~0.28, so most values cluster near 0
@@ -119,37 +119,36 @@ class Server:
         # --- Step 3: Local Training ---
         t_start_train = time.time()
         
-        # global weights to CPU for pickling
+        # global weights to CPU for safe state_dict loading
         global_weights_cpu = {k: v.cpu() for k, v in self.global_model.state_dict().items()}
         
-        mp_args = []
+        # DECISION: Parallel GPU or Serial GPU?
+        # ThreadPoolExecutor shares memory space, so all threads CAN share the GPU.
+        # This is safe because PyTorch uses a single CUDA context per process.
+        max_parallel = config.MAX_PARALLEL_CLIENTS
+        use_parallel = (max_parallel is not None) and (max_parallel > 1)
         
-        # DECISION: Parallel CPU or Serial GPU?
-        # If MAX_PARALLEL_CLIENTS is set, we use multiprocessing on CPU.
-        use_parallel = (config.MAX_PARALLEL_CLIENTS is not None) and (config.MAX_PARALLEL_CLIENTS > 1)
+        # Always train on the GPU (server device)
+        training_device = self.device
         
         if use_parallel:
-            # PARALLEL MODE: Use the device defined in config (likely CUDA)
-            # CAUTION: This requires sufficient VRAM.
-            training_device = self.device
+            # GPU-PARALLEL MODE: Multiple threads share the GPU
+            # Each thread loads weights, trains, and returns results.
+            # The GPU handles concurrent kernel launches efficiently.
+            mp_args = []
             for client in selected_clients:
                 is_byz = client.client_id in byzantine_client_set
                 mp_args.append((client, global_weights_cpu, is_byz, attack_type, training_device))
             
-            # Run in ThreadPool
-            with concurrent.futures.ThreadPoolExecutor(max_workers=config.MAX_PARALLEL_CLIENTS) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_parallel) as executor:
                 updates = list(executor.map(client_training_wrapper, mp_args))
                 
         else:
-            # SERIAL MODE: Use the config device (likely GPU)
-            # This is often faster for small models!
+            # SERIAL MODE: One client at a time on GPU
             updates = []
-            training_device = self.device # Use Server's GPU
             for client in selected_clients:
                 is_byz = client.client_id in byzantine_client_set
-                # We call the wrapper directly or client.train directly
-                # Note: We must pass 'None' for force_device to let client use its default
-                res = client.train(global_weights_cpu, is_byz, attack_type, force_device=None)
+                res = client.train(global_weights_cpu, is_byz, attack_type, force_device=training_device)
                 updates.append(res)
 
         if config.DEVICE.type == 'cuda':
@@ -157,8 +156,6 @@ class Server:
         t_end_train = time.time()
         print(f"    > Training Time: {t_end_train - t_start_train:.2f}s")
         
-        # --- Step 4: Aggregation ---
-        t_start_agg = time.time()
         # --- Step 4: Aggregation ---
         t_start_agg = time.time()
         
@@ -192,8 +189,8 @@ class Server:
                     viz_data = {
                         "coords": coords,
                         "approved_indices": agg_stats['approved_indices'],
-                        "original_indices": [c.client_id for c in selected_clients], # Correctly derived from local variable
-                        "byzantine_set": list(byzantine_client_set)        # To know who is ACTUALLY bad
+                        "original_indices": [c.client_id for c in selected_clients],
+                        "byzantine_set": list(byzantine_client_set)
                     }
                 else:
                     # Not enough samples for PCA
@@ -201,9 +198,6 @@ class Server:
             except ImportError:
                 print("    > [Visualizer] Sklearn not found. Skipping PCA plot.")
                 pass
-        if config.DEVICE.type == 'cuda':
-            torch.cuda.synchronize()
-        t_end_agg = time.time()
         
         # --- Step 5: Update Global Model ---
         if new_global_weights:
@@ -212,7 +206,9 @@ class Server:
         return {
             "train_time": t_end_train - t_start_train,
             "agg_time": t_end_agg - t_start_agg,
-            "viz_data": viz_data
+            "viz_data": viz_data,
+            "num_byzantine": num_byzantine,
+            "num_selected": len(selected_clients)
         }
 
     def evaluate(self):

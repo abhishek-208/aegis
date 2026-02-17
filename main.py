@@ -41,16 +41,16 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': False,  # <-- Set to False to skip the sign_flip test
+        'run': False,  
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
-        'fraction_byzantine': config.FRACTION_BYZANTINE,   # Use a strong 40% attack
-        'color': 'r', # Red
+        'fraction_byzantine': config.FRACTION_BYZANTINE,   
+        'color': 'r', 
         'marker': 'x'
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': True,  
         'label': f"Aegis (With {config.ATTACK_TYPE} Attack)",
         'aggregator': aegis,
         'attack_type': config.ATTACK_TYPE,
@@ -218,6 +218,8 @@ def run_simulation(exp_config):
     # --- Step 3: Run Training Rounds ---
     accuracy_history = []
     loss_history = []
+    attack_intensity_history = []
+    participant_counts = []
     
     # Early Stopping Initialization
     best_loss = float('inf')
@@ -237,6 +239,12 @@ def run_simulation(exp_config):
         # Add round timings to summary
         timing_summary["client_training"] += round_timings["train_time"]
         timing_summary["server_aggregation"] += round_timings["agg_time"]
+        
+        # Track attack intensity for visualization
+        num_byz = round_timings.get("num_byzantine", 0)
+        num_sel = round_timings.get("num_selected", 1)
+        attack_intensity_history.append(num_byz / num_sel if num_sel > 0 else 0.0)
+        participant_counts.append(num_sel)
         
         # --- Step 4: Evaluate (Timed) ---
         if (round_num + 1) % config.EVALUATE_EVERY_N_ROUNDS == 0:
@@ -316,6 +324,8 @@ def run_simulation(exp_config):
         "marker": exp_config['marker'],
         "history": accuracy_history,
         "loss_history": loss_history,
+        "attack_intensity": attack_intensity_history,
+        "participant_counts": participant_counts,
         "duration": total_duration
     }
 
