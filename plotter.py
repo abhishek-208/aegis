@@ -16,7 +16,7 @@ def _add_attack_shading(ax, all_results, config_module):
     Darker red = more attackers that round. Only shades if attack_intensity > 0.
     Uses the FIRST result that has a non-zero attack to determine shading.
     """
-    MAX_ALPHA = 0.35  # Maximum opacity for the shading
+    MAX_ALPHA = 0.55  # Maximum opacity for the shading
     
     for result in all_results:
         intensities = result.get('attack_intensity', [])
@@ -30,7 +30,7 @@ def _add_attack_shading(ax, all_results, config_module):
                 alpha = intensity * MAX_ALPHA  # Scale alpha by attack fraction
                 ax.axvspan(
                     round_x - 0.5, round_x + 0.5,
-                    color='red', alpha=alpha, linewidth=0
+                    color='red', alpha=alpha, linewidth=0, zorder=2
                 )
         
         # Add legend entry for the shading

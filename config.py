@@ -65,8 +65,8 @@ ATTACK_PROBABILITY = 1    # Probability that a traitor attacks in a given round
 ATTACK_WINDOW_MIN_DURATION = 10     # Minimum attack window length
 ATTACK_WINDOW_MAX_DURATION = 50     # Maximum attack window length
 
-EXPECTED_CONVERGENCE_ROUNDS = 200   # Estimated rounds for model to converge
-ATTACK_DEADLINE_PERCENT = 0.40      # Attacks must START within this % of convergence
+EXPECTED_CONVERGENCE_ROUNDS = 300   # Estimated rounds for model to converge
+ATTACK_DEADLINE_PERCENT = 0.50     # Attacks must START within this % of convergence
 ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)  # = 80
 
 
