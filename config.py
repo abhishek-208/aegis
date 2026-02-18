@@ -35,8 +35,8 @@ LEARNING_RATE = 0.001
 MOMENTUM = 0.8            
 
 # --- === Aegis Parameters === ---
-# T = S_median + (Threshold * MAD)
-RWA_MAD_THRESHOLD = 3.0
+# T = median_distance + (OUTLIER_SENSITIVITY * MAD)
+OUTLIER_SENSITIVITY = 3.0
 RWA_EPSILON = 1e-9
 
 # --- === Attack Parameters === ---
