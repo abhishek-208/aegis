@@ -77,7 +77,7 @@ PATIENCE = 10           # Number of rounds to wait for improvement
 MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
 
 # --- === Results Directory === ---
-RESULTS_DIR = 'Results'
+RESULTS_DIR = r'D:\IITD\MTP 2\Results'
 
 # --- === Visualization Parameters === ---
 VISUALIZE_GRADIENTS = False       # Master toggle for scatter plots
