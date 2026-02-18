@@ -12,7 +12,7 @@ import torch
 import copy
 import math  # <-- ADDED for math.floor
 from collections import OrderedDict
-from config import DEVICE, RWA_MAD_THRESHOLD, RWA_EPSILON, REJECTION_PENALTY_SCORE
+from config import DEVICE, OUTLIER_SENSITIVITY, RWA_EPSILON, REJECTION_PENALTY_SCORE
 
 # --- === HELPER FUNCTIONS FOR Aegis/Krum/CWMed === ---
 
@@ -115,9 +115,9 @@ def aegis(updates):
 
     # --- Step 4: Hard Filtering (MAD + Directional) ---
     # A. Euclidean Stats
-    s_median = torch.median(euclidean_distances)    # median distance
-    s_mad = torch.median(torch.abs(euclidean_distances - s_median))    # median absolute deviation
-    mad_threshold = s_median + (RWA_MAD_THRESHOLD * s_mad)
+    median_distance = torch.median(euclidean_distances)    # median distance
+    distance_mad = torch.median(torch.abs(euclidean_distances - median_distance))    # median absolute deviation
+    rejection_cutoff = median_distance + (OUTLIER_SENSITIVITY * distance_mad)
     
 
 
@@ -125,7 +125,7 @@ def aegis(updates):
     # Reject if Distance > Threshold OR Cosine Similarity < 0 (Opposite direction)
     # Using indices logic
     
-    pass_euclidean = euclidean_distances <= mad_threshold
+    pass_euclidean = euclidean_distances <= rejection_cutoff
     pass_direction = cos_sim >= 0.0 # Reject negative cosine similarity
     
     approved_mask = pass_euclidean & pass_direction
