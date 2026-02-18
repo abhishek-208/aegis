@@ -44,7 +44,7 @@ class Server:
         num_to_select = min(num_to_select, len(all_clients))
         return random.sample(all_clients, num_to_select)
 
-    def run_round(self, all_clients, attack_type, fraction_byzantine):
+    def run_round(self, all_clients, attack_type, fraction_byzantine, current_round=None):
         """Orchestrates one complete round of federated learning."""
         
         # --- Step 1: Client Selection ---
@@ -105,7 +105,12 @@ class Server:
         t_start_agg = time.time()
         
         # Aggregator now returns (weights, stats) tuple
-        new_global_weights, agg_stats = self.aggregator_func(updates)
+        # Pass current_round for adaptive thresholding (aegis uses it, others ignore it)
+        try:
+            new_global_weights, agg_stats = self.aggregator_func(updates, current_round=current_round)
+        except TypeError:
+            # Aggregator doesn't accept current_round (e.g., fed_avg, cw_med, multi_krum)
+            new_global_weights, agg_stats = self.aggregator_func(updates)
         
         if config.DEVICE.type == 'cuda':
             torch.cuda.synchronize()

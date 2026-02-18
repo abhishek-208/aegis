@@ -230,7 +230,8 @@ def run_simulation(exp_config):
         round_timings = server.run_round(
             all_clients=all_clients,
             attack_type=exp_config['attack_type'],
-            fraction_byzantine=exp_config['fraction_byzantine']
+            fraction_byzantine=exp_config['fraction_byzantine'],
+            current_round=round_num
         )
         
         # Add round timings to summary

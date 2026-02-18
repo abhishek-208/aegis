@@ -22,7 +22,7 @@ COMPARE_AEGIS_SCENARIOS = False
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
-DATA_SPLIT_TYPE = 'BALANCED_IID'
+DATA_SPLIT_TYPE = 'NON_IID'
 
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 2 
@@ -31,12 +31,24 @@ BATCH_SIZE = 128
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.001      
+LEARNING_RATE = 0.01      
 MOMENTUM = 0.8            
 
 # --- === Aegis Parameters === ---
-# T = median_distance + (OUTLIER_SENSITIVITY * MAD)
-OUTLIER_SENSITIVITY = 3.0
+# Adaptive Thresholding (Strategy A + C)
+# The rejection cutoff: T = median_distance + (k * MAD)
+# where k adapts each round based on training phase and current variance.
+ADAPTIVE_THRESHOLD_ENABLED = True   # Set False to use fixed OUTLIER_SENSITIVITY
+OUTLIER_SENSITIVITY = 3.0           # Fixed fallback when adaptive is disabled
+
+# Strategy A: Round-Based Decay — k decays from K_MAX to K_MIN over WARMUP_ROUNDS
+K_MAX = 6.0                         # Initial (loose) threshold multiplier
+K_MIN = 2.0                         # Final (strict) threshold multiplier
+WARMUP_ROUNDS = 200                 # Rounds over which k linearly decays
+
+# Strategy C: Variance-Normalized — k self-calibrates based on current spread
+VARIANCE_SENSITIVITY = 3.0          # How much to relax k when updates are spread out
+
 RWA_EPSILON = 1e-9
 
 # --- === Attack Parameters === ---

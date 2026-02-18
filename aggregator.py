@@ -12,7 +12,9 @@ import torch
 import copy
 import math  # <-- ADDED for math.floor
 from collections import OrderedDict
-from config import DEVICE, OUTLIER_SENSITIVITY, RWA_EPSILON
+from config import (DEVICE, OUTLIER_SENSITIVITY, RWA_EPSILON,
+                     ADAPTIVE_THRESHOLD_ENABLED, K_MAX, K_MIN,
+                     WARMUP_ROUNDS, VARIANCE_SENSITIVITY)
 
 # --- === HELPER FUNCTIONS FOR Aegis/Krum/CWMed === ---
 
@@ -60,10 +62,11 @@ def fed_avg(updates):
     return avg_weights, None # No stats for FedAvg
 
 
-def aegis(updates):
+def aegis(updates, current_round=None):
     """
     Performs our Byzantine-Resilient Aegis (Aegis).
     Upgraded to handle Sign Flip and Label Flip via Cosine Similarity.
+    Uses adaptive thresholding (Strategy A+C) when enabled.
     """
     print("    > Aggregator: Aegis...")
     
@@ -117,7 +120,22 @@ def aegis(updates):
     # A. Euclidean Stats
     median_distance = torch.median(euclidean_distances)    # median distance
     distance_mad = torch.median(torch.abs(euclidean_distances - median_distance))    # median absolute deviation
-    rejection_cutoff = median_distance + (OUTLIER_SENSITIVITY * distance_mad)
+
+    # Compute adaptive k (Strategy A + C) or use fixed value
+    if ADAPTIVE_THRESHOLD_ENABLED and current_round is not None:
+        # Strategy A: Round-Based Decay — k_phase decays linearly from K_MAX to K_MIN
+        progress = min(current_round / WARMUP_ROUNDS, 1.0)
+        k_phase = K_MAX - (K_MAX - K_MIN) * progress
+
+        # Strategy C: Variance-Normalized — self-calibrate based on coefficient of variation
+        coeff_of_variation = distance_mad / (median_distance + RWA_EPSILON)
+        k = k_phase * (1.0 + VARIANCE_SENSITIVITY * coeff_of_variation.item())
+
+        print(f"    > Adaptive k: {k:.3f} (phase={k_phase:.2f}, CV={coeff_of_variation:.4f}, round={current_round})")
+    else:
+        k = OUTLIER_SENSITIVITY
+
+    rejection_cutoff = median_distance + (k * distance_mad)
     
 
 
