@@ -35,6 +35,33 @@ class Server:
         self.global_model = get_model().to(self.device)
         self.aggregator_func = aggregator_func
         self.test_loader = test_loader
+        
+        # --- Fixed Byzantine Clients ---
+        # Select a fixed set of traitors once at the start.
+        # This simulates a real-world scenario where specific devices are compromised.
+        num_byzantine = math.floor(config.NUM_CLIENTS * config.FRACTION_BYZANTINE)
+        all_indices = list(range(config.NUM_CLIENTS))
+        self.fixed_byzantine_indices = set(random.sample(all_indices, num_byzantine))
+        
+        print(f"    [Server] Fixed Byzantine Clients (Count: {num_byzantine}): {sorted(list(self.fixed_byzantine_indices))}")
+        
+        # --- Random Attack Schedules ---
+        # Generate a start and end round for each traitor
+        self.byzantine_schedules = {}
+        for client_id in self.fixed_byzantine_indices:
+            # Ensure valid range
+            limit_from_total = max(0, config.NUM_ROUNDS - config.ATTACK_WINDOW_MIN_DURATION)
+            actual_max_start = min(limit_from_total, config.ATTACK_DEADLINE_ROUND)
+            
+            # Beta distribution biases ~80% of start rounds into early rounds
+            # betavariate(2, 5) has mean ~0.28, so most values cluster near 0
+            start_round = int(random.betavariate(2, 5) * actual_max_start)
+            
+            duration = random.randint(config.ATTACK_WINDOW_MIN_DURATION, config.ATTACK_WINDOW_MAX_DURATION)
+            end_round = start_round + duration
+            
+            self.byzantine_schedules[client_id] = (start_round, end_round)
+            print(f"    [Server] Traitor {client_id} will attack from Round {start_round} to {end_round}")
 
     def select_clients(self, all_clients):
         num_to_select = random.randint(
@@ -50,48 +77,64 @@ class Server:
         # --- Step 1: Client Selection ---
         selected_clients = self.select_clients(all_clients)
         
-        # --- Step 2: Designate Byzantine Clients ---
-        num_byzantine = math.floor(len(selected_clients) * fraction_byzantine)
-        byzantine_clients = random.sample(selected_clients, num_byzantine)
-        byzantine_client_set = set(c.client_id for c in byzantine_clients)
+        # --- Step 2: Determine Attackers for this Round ---
+        # Logic: A client is an attacker IF:
+        # 1. They are in the fixed byzantine list AND
+        # 2. The current round is within their attack window AND
+        # 3. They pass the probabilistic check (ATTACK_PROBABILITY)
+        
+        actual_attackers = []
+        for client in selected_clients:
+            if client.client_id in self.fixed_byzantine_indices:
+                # This client is a Traitor. Are they in their attack window?
+                is_active = False
+                if current_round is not None:
+                    start, end = self.byzantine_schedules.get(client.client_id, (0, 0))
+                    if start <= current_round <= end:
+                        is_active = True
+                else:
+                    # Fallback if current_round not provided
+                    is_active = True
+                
+                if is_active:
+                     if random.random() < config.ATTACK_PROBABILITY:
+                         actual_attackers.append(client)
+        
+        byzantine_client_set = set(c.client_id for c in actual_attackers)
+        num_byzantine = len(actual_attackers)
         
         # Always print round info
-        print(f"    > Round Info: {len(selected_clients)} Participants, {num_byzantine} Byzantine ({attack_type})")
+        print(f"    > Round Info: {len(selected_clients)} Participants, {num_byzantine} Active Attackers ({attack_type})")
 
         # --- Step 3: Local Training ---
         t_start_train = time.time()
         
-        # global weights to CPU for pickling
+        # global weights to CPU for safe state_dict loading
         global_weights_cpu = {k: v.cpu() for k, v in self.global_model.state_dict().items()}
         
-        mp_args = []
+        # DECISION: Parallel GPU or Serial GPU?
+        max_parallel = config.MAX_PARALLEL_CLIENTS
+        use_parallel = (max_parallel is not None) and (max_parallel > 1)
         
-        # DECISION: Parallel CPU or Serial GPU?
-        # If MAX_PARALLEL_CLIENTS is set, we use multiprocessing on CPU.
-        use_parallel = (config.MAX_PARALLEL_CLIENTS is not None) and (config.MAX_PARALLEL_CLIENTS > 1)
+        # Always train on the GPU (server device)
+        training_device = self.device
         
         if use_parallel:
-            # PARALLEL MODE: Use the device defined in config (likely CUDA)
-            # CAUTION: This requires sufficient VRAM.
-            training_device = self.device
+            # GPU-PARALLEL MODE: Multiple threads share the GPU
+            mp_args = []
             for client in selected_clients:
                 is_byz = client.client_id in byzantine_client_set
                 mp_args.append((client, global_weights_cpu, is_byz, attack_type, training_device))
             
-            # Run in ThreadPool
-            with concurrent.futures.ThreadPoolExecutor(max_workers=config.MAX_PARALLEL_CLIENTS) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_parallel) as executor:
                 updates = list(executor.map(client_training_wrapper, mp_args))
                 
         else:
-            # SERIAL MODE: Use the config device (likely GPU)
-            # This is often faster for small models!
+            # SERIAL MODE: One client at a time on GPU
             updates = []
-            training_device = self.device # Use Server's GPU
             for client in selected_clients:
                 is_byz = client.client_id in byzantine_client_set
-                # We call the wrapper directly or client.train directly
-                # Note: We must pass 'None' for force_device to let client use its default
-                res = client.train(global_weights_cpu, is_byz, attack_type, force_device=None)
+                res = client.train(global_weights_cpu, is_byz, attack_type, force_device=training_device)
                 updates.append(res)
 
         if config.DEVICE.type == 'cuda':
@@ -99,8 +142,6 @@ class Server:
         t_end_train = time.time()
         print(f"    > Training Time: {t_end_train - t_start_train:.2f}s")
         
-        # --- Step 4: Aggregation ---
-        t_start_agg = time.time()
         # --- Step 4: Aggregation ---
         t_start_agg = time.time()
         
@@ -133,8 +174,8 @@ class Server:
                     viz_data = {
                         "coords": coords,
                         "approved_indices": agg_stats['approved_indices'],
-                        "original_indices": [c.client_id for c in selected_clients], # Correctly derived from local variable
-                        "byzantine_set": list(byzantine_client_set)        # To know who is ACTUALLY bad
+                        "original_indices": [c.client_id for c in selected_clients],
+                        "byzantine_set": list(byzantine_client_set)
                     }
                 else:
                     # Not enough samples for PCA
@@ -142,18 +183,23 @@ class Server:
             except ImportError:
                 print("    > [Visualizer] Sklearn not found. Skipping PCA plot.")
                 pass
-        if config.DEVICE.type == 'cuda':
-            torch.cuda.synchronize()
-        t_end_agg = time.time()
         
         # --- Step 5: Update Global Model ---
         if new_global_weights:
             self.global_model.load_state_dict(new_global_weights)
 
+        # Extract stats (e.g., adaptive k)
+        adaptive_k = None
+        if agg_stats and "adaptive_k" in agg_stats:
+            adaptive_k = agg_stats["adaptive_k"]
+
         return {
             "train_time": t_end_train - t_start_train,
             "agg_time": t_end_agg - t_start_agg,
-            "viz_data": viz_data
+            "viz_data": viz_data,
+            "num_byzantine": num_byzantine,
+            "num_selected": len(selected_clients),
+            "adaptive_k": adaptive_k # Pass k to main.py
         }
 
     def evaluate(self):

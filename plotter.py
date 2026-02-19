@@ -8,6 +8,70 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os 
 import config as config # Import config to use its values
+from matplotlib.patches import Patch
+
+def _add_attack_shading(ax, all_results, config_module):
+    """
+    Adds vertical red shading bands to the plot based on attack intensity.
+    Darker red = more attackers that round. Only shades if attack_intensity > 0.
+    Uses the FIRST result that has a non-zero attack to determine shading.
+    """
+    MAX_ALPHA = 0.7  # Maximum opacity for the shading 
+    
+    for result in all_results:
+        intensities = result.get('attack_intensity', [])
+        if not intensities or max(intensities) == 0:
+            continue
+        
+        # We found a result with attacks — use it for shading
+        for round_idx, intensity in enumerate(intensities):
+            if intensity > 0:
+                round_x = round_idx + 1  # Rounds are 1-indexed
+                alpha = intensity * MAX_ALPHA  # Scale alpha by attack fraction
+                ax.axvspan(
+                    round_x - 0.5, round_x + 0.5,
+                    color='red', alpha=alpha, linewidth=0, zorder=2
+                )
+        
+        # Add legend entry for the shading
+        shading_patch = Patch(
+            facecolor='red', alpha=MAX_ALPHA * 0.5,
+            label=f'Attack Intensity (max {max(intensities)*100:.0f}% Byzantine)'
+        )
+        handles, labels = ax.get_legend_handles_labels()
+        handles.append(shading_patch)
+        ax.legend(handles=handles, loc='lower right', fontsize=10)
+        break  # Only shade once (all experiments share the same attack pattern)
+
+def _add_participant_bars(ax, all_results):
+    """
+    Adds semi-transparent bars on a twin y-axis showing number of 
+    participants per round. Uses the FIRST result with participant data.
+    """
+    for result in all_results:
+        counts = result.get('participant_counts', [])
+        if not counts:
+            continue
+        
+        ax2 = ax.twinx()
+        rounds = np.arange(1, len(counts) + 1)
+        
+        ax2.bar(
+            rounds, counts,
+            color='gray', alpha=0.15, width=1.0,
+            label='Participants/Round', zorder=0
+        )
+        ax2.set_ylabel('Participants per Round', fontsize=10, color='gray')
+        ax2.tick_params(axis='y', labelcolor='gray', labelsize=9)
+        ax2.set_ylim(0, max(counts) * 2.5)  # Keep bars short (bottom portion)
+        
+        # Add to legend
+        handles, labels = ax.get_legend_handles_labels()
+        bar_patch = Patch(facecolor='gray', alpha=0.3, label='Participants/Round')
+        handles.append(bar_patch)
+        ax.legend(handles=handles, loc='lower right', fontsize=10)
+        
+        break  # Only use first result
 
 def plot_results(all_results, config_module):
     """
@@ -81,6 +145,47 @@ def plot_results(all_results, config_module):
         )
     
     ax_acc.legend(loc='lower right', fontsize=10)
+    _add_attack_shading(ax_acc, all_results, config_module)
+    _add_participant_bars(ax_acc, all_results)
+    
+    # --- Adaptive K Plot (Twin Axis) ---
+    # We only plot this if at least one result has valid adaptive k history
+    has_adaptive_k = any(r.get('adaptive_k_history') and any(k is not None for k in r['adaptive_k_history']) for r in all_results)
+    
+    if has_adaptive_k:
+        ax_k = ax_acc.twinx()
+        ax_k.set_ylabel('Adaptive Threshold (k)', fontsize=12, color='black')
+        ax_k.spines['right'].set_position(('outward', 60)) # Move slightly right to not overlap with participants
+        
+        for result in all_results:
+            k_hist = result.get('adaptive_k_history', [])
+            if not k_hist or all(k is None for k in k_hist):
+                continue
+                
+            # Filter None values (plot continuous line for available segments)
+            # Simplest approach: Replace None with np.nan and plot
+            k_values = [k if k is not None else np.nan for k in k_hist]
+            
+            # Determine x-axis (same as accuracy)
+            num_points_k = len(k_values)
+            actual_rounds_k = np.arange(1, num_points_k + 1)
+            
+            # Since accuracy is evaluated every N rounds, but K is recorded every round?
+            # Wait, main.py records k EVERY ROUND. Accuracy is EVERY N.
+            # So actual_rounds_k should be 1..Total.
+            
+            # Plot K as a thin black line
+            ax_k.plot(actual_rounds_k, k_values, color='black', linewidth=1.0, linestyle='-', alpha=0.6, label='Adaptive k')
+
+        # Add to legend manually or trust standard legend?
+        # Standard legend on ax_acc won't show ax_k lines easily without manual work.
+        # Let's add a dummy patch to ax_acc legend
+        k_line_proxy = plt.Line2D([0], [0], color='black', linewidth=1.0, label='Adaptive Threshold (k)')
+        handles, labels = ax_acc.get_legend_handles_labels()
+        handles.append(k_line_proxy)
+        ax_acc.legend(handles=handles, loc='lower right', fontsize=10)
+
+
     ax_acc.text(
         0.02, 0.98, param_text, 
         transform=ax_acc.transAxes, 
@@ -126,6 +231,8 @@ def plot_results(all_results, config_module):
         )
     
     ax_loss.legend(loc='upper right', fontsize=10)
+    _add_attack_shading(ax_loss, all_results, config_module)
+    _add_participant_bars(ax_loss, all_results)
     ax_loss.text(
         0.02, 0.98, param_text, 
         transform=ax_loss.transAxes, 

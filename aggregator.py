@@ -14,7 +14,7 @@ import math  # <-- ADDED for math.floor
 from collections import OrderedDict
 from config import (DEVICE, OUTLIER_SENSITIVITY, RWA_EPSILON,
                      ADAPTIVE_THRESHOLD_ENABLED, K_MAX, K_MIN,
-                     WARMUP_ROUNDS, VARIANCE_SENSITIVITY)
+                     WARMUP_ROUNDS, VARIANCE_SENSITIVITY, K_SAFE_FLOOR)
 
 # --- === HELPER FUNCTIONS FOR Aegis/Krum/CWMed === ---
 
@@ -130,10 +130,15 @@ def aegis(updates, current_round=None):
         # Strategy C: Variance-Normalized — self-calibrate based on coefficient of variation
         coeff_of_variation = distance_mad / (median_distance + RWA_EPSILON)
         k = k_phase * (1.0 + VARIANCE_SENSITIVITY * coeff_of_variation.item())
+        k = max(k, K_SAFE_FLOOR) # Safety clamp
 
-        print(f"    > Adaptive k: {k:.3f} (phase={k_phase:.2f}, CV={coeff_of_variation:.4f}, round={current_round})")
+        print(f"    > Adaptive k: {k:.3f} (phase={k_phase:.2f}, CV={coeff_of_variation:.4f}, round={current_round + 1})")
     else:
         k = OUTLIER_SENSITIVITY
+        if ADAPTIVE_THRESHOLD_ENABLED: 
+            # If enabled but current_round is None (e.g. first call), we still want to track k
+            # But usually it is passed. If not passed, we can't adapt.
+             pass 
 
     rejection_cutoff = median_distance + (k * distance_mad)
     
@@ -179,7 +184,8 @@ def aegis(updates, current_round=None):
     # We return the original weights_matrix (on CPU if possible to save GPU mem) and approved indices
     stats = {
         "weights_matrix": weights_matrix.cpu().numpy(),
-        "approved_indices": approved_indices.cpu().numpy()
+        "approved_indices": approved_indices.cpu().numpy(),
+        "adaptive_k": k if ADAPTIVE_THRESHOLD_ENABLED else None # Return k for plotting
     }
     
     return new_global_model_dict, stats
