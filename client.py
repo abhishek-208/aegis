@@ -12,7 +12,7 @@ from model import get_model
 
 # --- === Byzantine Attack Implementation === ---
 
-def apply_attack(weights, attack_type):
+def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
     """Corrupts a set of model weights based on the specified attack type."""
     if attack_type == 'none' or attack_type == 'label_flip':
         return weights
@@ -21,7 +21,10 @@ def apply_attack(weights, attack_type):
     
     if attack_type == 'sign_flip':
         for key, tensor in weights.items():
-            corrupted_weights[key] = tensor * -1.0
+            global_tensor = global_weights[key].to(tensor.device)
+            delta = tensor - global_tensor
+            # Flip the delta and re-apply back to the global weights
+            corrupted_weights[key] = global_tensor - (scale_factor * delta)
         return corrupted_weights
         
     elif attack_type == 'additive_noise':
@@ -114,7 +117,7 @@ class Client:
         
         # --- Step 3: Apply Attack (if Byzantine) ---
         if is_byzantine:
-            corrupted_weights = apply_attack(local_weights, attack_type)
+            corrupted_weights = apply_attack(local_weights, global_model_state_dict, attack_type)
             
             # --- Volume Spam Logic ---
             if attack_type == 'volume_spam':
