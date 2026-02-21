@@ -16,7 +16,7 @@ def _add_attack_shading(ax, all_results, config_module):
     Darker red = more attackers that round. Only shades if attack_intensity > 0.
     Uses the FIRST result that has a non-zero attack to determine shading.
     """
-    MAX_ALPHA = 0.7  # Maximum opacity for the shading 
+    MAX_ALPHA = 0.9  # Maximum opacity for the shading 
     
     for result in all_results:
         intensities = result.get('attack_intensity', [])
@@ -58,7 +58,7 @@ def _add_participant_bars(ax, all_results):
         
         ax2.bar(
             rounds, counts,
-            color='gray', alpha=0.15, width=1.0,
+            color='gray', alpha=0.6, width=1.0,
             label='Participants/Round', zorder=0
         )
         ax2.set_ylabel('Participants per Round', fontsize=10, color='gray')
@@ -67,7 +67,7 @@ def _add_participant_bars(ax, all_results):
         
         # Add to legend
         handles, labels = ax.get_legend_handles_labels()
-        bar_patch = Patch(facecolor='gray', alpha=0.3, label='Participants/Round')
+        bar_patch = Patch(facecolor='gray', alpha=0.6, label='Participants/Round')
         handles.append(bar_patch)
         ax.legend(handles=handles, loc='lower right', fontsize=10)
         

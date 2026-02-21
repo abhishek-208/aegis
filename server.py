@@ -36,6 +36,10 @@ class Server:
         self.aggregator_func = aggregator_func
         self.test_loader = test_loader
         
+        # --- velocity buffer for Global Momentum (FedAvgM) ---
+        # Stores the "moving average" of the server updates (V_t)
+        self.server_momentum_buffer = None
+        
         # --- Fixed Byzantine Clients ---
         # Select a fixed set of traitors once at the start.
         # This simulates a real-world scenario where specific devices are compromised.
@@ -185,8 +189,37 @@ class Server:
                 pass
         
         # --- Step 5: Update Global Model ---
-        if new_global_weights:
-            self.global_model.load_state_dict(new_global_weights)
+        if new_global_weights: 
+            if config.SERVER_MOMENTUM_ENABLED:  #In case of Global Momentum
+                current_global_weights = self.global_model.state_dict()
+                
+                # 1. Initialize velocity buffer if it's the first round
+                if self.server_momentum_buffer is None:
+                    self.server_momentum_buffer = {}
+                    for k, v in current_global_weights.items():
+                        self.server_momentum_buffer[k] = torch.zeros_like(v, device=self.device)
+                
+                # 2. Compute Pseudo-Gradient and Apply Momentum
+                final_weights = {}
+                for k in new_global_weights.keys():
+                    v_current = current_global_weights[k].to(self.device)
+                    v_new = new_global_weights[k].to(self.device)
+                    
+                    # Pseudo-Gradient: The direction the clients *want* the server to move.
+                    pseudo_grad = v_new - v_current
+                    
+                    # Velocity Update: V_t = (Momentum * V_t-1) + Pseudo-Gradient
+                    # We keep a fraction of the previous velocity (inertia) and add the current push.
+                    velocity = (config.SERVER_MOMENTUM * self.server_momentum_buffer[k]) + pseudo_grad
+                    self.server_momentum_buffer[k] = velocity
+                    
+                    # Final Model Update: W_t = W_t-1 + (Learning_Rate * V_t)
+                    final_weights[k] = v_current + (config.SERVER_LEARNING_RATE * velocity)
+                    
+                self.global_model.load_state_dict(final_weights)
+            else:
+                # Standard FL: Just load the newly averaged weights directly (No memory and no global momentum)
+                self.global_model.load_state_dict(new_global_weights)
 
         # Extract stats (e.g., adaptive k)
         adaptive_k = None
