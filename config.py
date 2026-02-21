@@ -25,13 +25,13 @@ DATASET_NAME = 'CIFAR10'
 DATA_SPLIT_TYPE = 'NON_IID'
 
 # For NON_IID: Number of classes/shards per client
-SHARDS_PER_CLIENT = 5
+SHARDS_PER_CLIENT = 6
 DIRICHLET_ALPHA = 0.5
 BATCH_SIZE = 128           
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.001      
+LEARNING_RATE = 0.0005      
 MOMENTUM = 0.8            
 
 # --- === Aegis Parameters === ---
@@ -45,7 +45,7 @@ OUTLIER_SENSITIVITY = 3.0           # Fixed fallback when adaptive is disabled
 K_MAX = 6.0                         # Initial (loose) threshold multiplier
 K_MIN = 2.0                         # Final (strict) threshold multiplier
 WARMUP_ROUNDS = 200                 # Rounds over which k linearly decays
-K_SAFE_FLOOR = 3.0                  # Absolute minimum k, even with low variance (For Non IID cases)
+K_SAFE_FLOOR = 5.0                  # Absolute minimum k, even with low variance (For Non IID cases)
 
 # Strategy C: Variance-Normalized — k self-calibrates based on current spread
 VARIANCE_SENSITIVITY = 3.0          # How much to relax k when updates are spread out
@@ -67,9 +67,9 @@ ATTACK_PROBABILITY = 1    # Probability that a traitor attacks in a given round
 # Each traitor picks a start round [0, NUM_ROUNDS - MIN_DURATION]
 # And a duration [MIN_DURATION, MAX_DURATION]
 ATTACK_WINDOW_MIN_DURATION = 10     # Minimum attack window length
-ATTACK_WINDOW_MAX_DURATION = 50     # Maximum attack window length
+ATTACK_WINDOW_MAX_DURATION = 80     # Maximum attack window length
 
-EXPECTED_CONVERGENCE_ROUNDS = 300   # Estimated rounds for model to converge
+EXPECTED_CONVERGENCE_ROUNDS = 400   # Estimated rounds for model to converge
 ATTACK_DEADLINE_PERCENT = 0.50     # Attacks must START within this % of convergence
 ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)
 
@@ -97,7 +97,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- === Early Stopping Parameters === ---
 EARLY_STOPPING_ENABLED = True
-PATIENCE = 10           # Number of rounds to wait for improvement
+PATIENCE = 20           # Number of rounds to wait for improvement
 MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
 
 # --- === Results Directory === ---
