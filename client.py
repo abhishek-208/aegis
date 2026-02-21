@@ -28,13 +28,26 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
         return corrupted_weights
         
     elif attack_type == 'additive_noise':
-        # Mean Shift Attack
+        # Stealthy Gaussian Noise on Deltas
         for key, tensor in weights.items():
+            global_tensor = global_weights[key].to(tensor.device)
+            delta = tensor - global_tensor
             
-            # We use tensor.device to match the device of the weights (which is CPU).
+            # Generate random gaussian noise
+            noise = torch.randn_like(delta)
             
-            noise = torch.ones_like(tensor, device=tensor.device) * config.ATTACK_NOISE_STD
-            corrupted_weights[key] = tensor + noise
+            # Scale the noise to be a multiple of the honest delta's norm to stay somewhat stealthy
+            delta_norm = torch.norm(delta)
+            noise_norm = torch.norm(noise)
+            
+            # Fallback to avoid division by zero if noise matrix is completely zero
+            if noise_norm > 1e-9:
+                 scaled_noise = noise * (delta_norm / noise_norm) * config.ATTACK_NOISE_STD
+            else:
+                 scaled_noise = noise
+                 
+            corrupted_weights[key] = global_tensor + delta + scaled_noise
+            
         return corrupted_weights
         
     elif attack_type == 'orthogonal':
