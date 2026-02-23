@@ -113,11 +113,14 @@ class Client:
         self.dataloader = dataloader
         self.device = config.DEVICE
 
-    def train(self, global_model_state_dict, is_byzantine=False, attack_type='none', force_device=None):
+    def train(self, global_model_state_dict, is_byzantine=False, attack_type='none', force_device=None, current_lr=None):
         """Performs one round of local training."""
         
         # Determine which device to use for this specific training run
         train_device = force_device if force_device else self.device
+        
+        # Fallback to config lr if none provided
+        lr_to_use = current_lr if current_lr is not None else config.LEARNING_RATE
         
         # --- Step 1: Setup ---
         model = get_model().to(train_device)
@@ -126,7 +129,7 @@ class Client:
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(
             model.parameters(), 
-            lr=config.LEARNING_RATE, 
+            lr=lr_to_use, 
             momentum=config.MOMENTUM
         )
         

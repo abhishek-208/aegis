@@ -34,6 +34,11 @@ LOCAL_EPOCHS = 1
 LEARNING_RATE = 0.0005      
 MOMENTUM = 0.8            
 
+# --- === Learning Rate Decay parameters === ---
+LR_DECAY_ENABLED = True
+LR_DECAY_RATE = 0.99       # Decay multiplier per round
+MIN_LR = 1e-5              # Minimum learning rate limit
+
 # --- === Server-Side Global Momentum Parameters === ---
 # By default, standard FedAvg/Aegis has no server memory (it just averages). 
 # Enabling Server Momentum acts like an inertia buff, preventing massive late-stage accuracy drops 

@@ -16,16 +16,16 @@ from model import get_model
 def client_training_wrapper(args):
     """
     Standalone function for multiprocessing.
-    args: (client_instance, global_weights, is_byzantine, attack_type, device_to_use)
+    args: (client_instance, global_weights, is_byzantine, attack_type, device_to_use, current_lr)
     """
-    # Unpack the   5th argument
-    client, global_weights, is_byzantine, attack_type, device = args
+    # Unpack the 6 arguments
+    client, global_weights, is_byzantine, attack_type, device, current_lr = args
     
     # CRITICAL: Prevent oversubscription. Each worker gets 1 thread.
     if device == 'cpu':
         torch.set_num_threads(1)
         
-    return client.train(global_weights, is_byzantine, attack_type, force_device=device)
+    return client.train(global_weights, is_byzantine, attack_type, force_device=device, current_lr=current_lr)
 
 # --- ================================== ---
 
@@ -39,6 +39,9 @@ class Server:
         # --- velocity buffer for Global Momentum (FedAvgM) ---
         # Stores the "moving average" of the server updates (V_t)
         self.server_momentum_buffer = None
+        
+        # --- Learning Rate Management ---
+        self.current_lr = config.LEARNING_RATE
         
         # --- Fixed Byzantine Clients ---
         # Select a fixed set of traitors once at the start.
@@ -128,7 +131,7 @@ class Server:
             mp_args = []
             for client in selected_clients:
                 is_byz = client.client_id in byzantine_client_set
-                mp_args.append((client, global_weights_cpu, is_byz, attack_type, training_device))
+                mp_args.append((client, global_weights_cpu, is_byz, attack_type, training_device, self.current_lr))
             
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_parallel) as executor:
                 updates = list(executor.map(client_training_wrapper, mp_args))
@@ -138,7 +141,7 @@ class Server:
             updates = []
             for client in selected_clients:
                 is_byz = client.client_id in byzantine_client_set
-                res = client.train(global_weights_cpu, is_byz, attack_type, force_device=training_device)
+                res = client.train(global_weights_cpu, is_byz, attack_type, force_device=training_device, current_lr=self.current_lr)
                 updates.append(res)
 
         if config.DEVICE.type == 'cuda':
@@ -225,6 +228,10 @@ class Server:
         adaptive_k = None
         if agg_stats and "adaptive_k" in agg_stats:
             adaptive_k = agg_stats["adaptive_k"]
+
+        # --- Step 6: Learning Rate Decay ---
+        if config.LR_DECAY_ENABLED:
+            self.current_lr = max(config.MIN_LR, self.current_lr * config.LR_DECAY_RATE)
 
         return {
             "train_time": t_end_train - t_start_train,
