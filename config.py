@@ -68,8 +68,8 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
-ATTACK_TYPE = 'additive_noise' 
-ATTACK_PROBABILITY = 1    # Probability that a traitor attacks in a given round
+ATTACK_TYPE = 'sign_flip' 
+ATTACK_PROBABILITY = 0.7    # Probability that a traitor attacks in a given round
 
 # --- === Attack Timeline Parameters === ---
 # Random Window Logic:
