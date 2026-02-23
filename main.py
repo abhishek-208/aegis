@@ -50,7 +50,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'x'
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': False,  # <-- Set to False to skip the sign_flip test
         'label': f"Aegis (With {config.ATTACK_TYPE} Attack)",
         'aggregator': aegis,
         'attack_type': config.ATTACK_TYPE,
@@ -82,6 +82,51 @@ EXPERIMENT_CONFIGS = [
         'fraction_byzantine': config.FRACTION_BYZANTINE, # This is for the server to *create* attackers
         'color': 'black',   #   color
         'marker': 'D'       #   marker (diamond)
+    },
+    {
+        'run': True,
+        'label': "Aegis (No Attack)",
+        'aggregator': aegis,
+        'attack_type': 'none',
+        'fraction_byzantine': 0.0,
+        'color': 'b',
+        'marker': 'o'
+    },
+    {
+        'run': True,
+        'label': "Aegis (Sign Flip)",
+        'aggregator': aegis,
+        'attack_type': 'sign_flip',
+        'fraction_byzantine': config.FRACTION_BYZANTINE,
+        'color': 'r',
+        'marker': 'x'
+    },
+    {
+        'run': True,
+        'label': "Aegis (Additive Noise)",
+        'aggregator': aegis,
+        'attack_type': 'additive_noise',
+        'fraction_byzantine': config.FRACTION_BYZANTINE,
+        'color': 'g',
+        'marker': 's'
+    },
+    {
+        'run': True,
+        'label': "Aegis (Label Flip)",
+        'aggregator': aegis,
+        'attack_type': 'label_flip',
+        'fraction_byzantine': config.FRACTION_BYZANTINE,
+        'color': 'magenta',
+        'marker': 'p'
+    },
+    {
+        'run': True,
+        'label': "Aegis (Orthogonal)",
+        'aggregator': aegis,
+        'attack_type': 'orthogonal',
+        'fraction_byzantine': config.FRACTION_BYZANTINE,
+        'color': 'black',
+        'marker': 'D'
     }
 
     

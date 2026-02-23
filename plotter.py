@@ -48,6 +48,7 @@ def _add_participant_bars(ax, all_results):
     Adds semi-transparent bars on a twin y-axis showing number of 
     participants per round. Uses the FIRST result with participant data.
     """
+    return # Temporarily disabled for cleaner plots
     for result in all_results:
         counts = result.get('participant_counts', [])
         if not counts:
@@ -150,7 +151,8 @@ def plot_results(all_results, config_module):
     
     # --- Adaptive K Plot (Twin Axis) ---
     # We only plot this if at least one result has valid adaptive k history
-    has_adaptive_k = any(r.get('adaptive_k_history') and any(k is not None for k in r['adaptive_k_history']) for r in all_results)
+    # has_adaptive_k = any(r.get('adaptive_k_history') and any(k is not None for k in r['adaptive_k_history']) for r in all_results)
+    has_adaptive_k = False # Temporarily disabled for cleaner plots
     
     if has_adaptive_k:
         ax_k = ax_acc.twinx()

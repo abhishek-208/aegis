@@ -91,21 +91,24 @@ class Server:
         # 3. They pass the probabilistic check (ATTACK_PROBABILITY)
         
         actual_attackers = []
-        for client in selected_clients:
-            if client.client_id in self.fixed_byzantine_indices:
-                # This client is a Traitor. Are they in their attack window?
-                is_active = False
-                if current_round is not None:
-                    start, end = self.byzantine_schedules.get(client.client_id, (0, 0))
-                    if start <= current_round <= end:
+        
+        # Only select attackers if the attack_type is not 'none'
+        if attack_type != 'none':
+            for client in selected_clients:
+                if client.client_id in self.fixed_byzantine_indices:
+                    # This client is a Traitor. Are they in their attack window?
+                    is_active = False
+                    if current_round is not None:
+                        start, end = self.byzantine_schedules.get(client.client_id, (0, 0))
+                        if start <= current_round <= end:
+                            is_active = True
+                    else:
+                        # Fallback if current_round not provided
                         is_active = True
-                else:
-                    # Fallback if current_round not provided
-                    is_active = True
-                
-                if is_active:
-                     if random.random() < config.ATTACK_PROBABILITY:
-                         actual_attackers.append(client)
+                    
+                    if is_active:
+                         if random.random() < config.ATTACK_PROBABILITY:
+                             actual_attackers.append(client)
         
         byzantine_client_set = set(c.client_id for c in actual_attackers)
         num_byzantine = len(actual_attackers)
