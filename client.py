@@ -51,25 +51,37 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
         return corrupted_weights
         
     elif attack_type == 'orthogonal':
-        # Orthogonal Scale Attack:
-        # Add a noise vector that is orthogonal to the current weights.
+        # Delta-Aware Orthogonal Noise Attack
         for key, tensor in weights.items():
-            noise = torch.randn_like(tensor, device=tensor.device)
+            global_tensor = global_weights[key].to(tensor.device)   
+            delta = tensor - global_tensor
             
-            # Gram-Schmidt Orthogonalization: v = n - proj_u(n)
+            noise = torch.randn_like(delta)
+            
+            # Gram-Schmidt Orthogonalization against the DELTA: v = n - proj_u(n)
             # proj = (n . u) / (u . u) * u
-            dot = torch.sum(noise * tensor)
-            norm_sq = torch.sum(tensor * tensor)
-            proj = (dot / (norm_sq + 1e-9)) * tensor
+            dot = torch.sum(noise * delta)
+            norm_sq = torch.sum(delta * delta)
+            
+            # Fallback to avoid division by zero
+            if norm_sq > 1e-9:
+                proj = (dot / norm_sq) * delta
+            else:
+                proj = torch.zeros_like(delta)
+                
             orth_noise = noise - proj
             
-            # Scale to match the weight magnitude (Strong attack)
-            current_norm = torch.norm(tensor)
+            # Scale to match the honest delta's magnitude (Stealthy + Strong attack)
+            delta_norm = torch.norm(delta)
             orth_norm = torch.norm(orth_noise)
+            
             if orth_norm > 1e-9:
-                orth_noise = orth_noise * (current_norm / orth_norm)
+                orth_noise = orth_noise * (delta_norm / orth_norm)
 
+            # Corrupted weights = Global + Honest Delta + Orthogonal Noise
+            # Since tensor = global_tensor + delta, we just add orth_noise to tensor
             corrupted_weights[key] = tensor + orth_noise
+            
         return corrupted_weights
 
     else:
