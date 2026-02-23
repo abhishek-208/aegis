@@ -52,34 +52,45 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
         
     elif attack_type == 'orthogonal':
         # Delta-Aware Orthogonal Noise Attack
+        # The goal is to add severe noise to the update, but ensure the noise is perfectly orthogonal (dot product = 0)
+        # to the honest update. This bypasses structural defenses (like Cosine Similarity) that measure update angles.
         for key, tensor in weights.items():
             global_tensor = global_weights[key].to(tensor.device)   
+            
+            # Step 1: Calculate the honest update (delta) that standard local training produced
             delta = tensor - global_tensor
             
+            # Step 2: Generate entirely random Gaussian noise
             noise = torch.randn_like(delta)
             
-            # Gram-Schmidt Orthogonalization against the DELTA: v = n - proj_u(n)
-            # proj = (n . u) / (u . u) * u
+            # Step 3: Perform Gram-Schmidt Orthogonalization against the DELTA
+            # We want to subtract the component of 'noise' that points in the direction of 'delta'.
+            # Formula: v_orthogonal = noise - projection_of_noise_onto_delta
+            # Projection formula = ((noise dot delta) / (delta dot delta)) * delta
             dot = torch.sum(noise * delta)
             norm_sq = torch.sum(delta * delta)
             
-            # Fallback to avoid division by zero
+            # Fallback to avoid division by zero if delta happens to be a perfectly zero matrix
             if norm_sq > 1e-9:
                 proj = (dot / norm_sq) * delta
             else:
                 proj = torch.zeros_like(delta)
                 
+            # 'orth_noise' is now mathematically guaranteed to be orthogonal to 'delta'
             orth_noise = noise - proj
             
-            # Scale to match the honest delta's magnitude (Stealthy + Strong attack)
+            # Step 4: Scale the orthogonal noise to match the honest delta's magnitude
+            # This makes the attack stealthy against magnitude/variance filters (like Median Absolute Deviation)
+            # because the total norm of the malicious update stays within expected statistical bounds.
             delta_norm = torch.norm(delta)
             orth_norm = torch.norm(orth_noise)
             
             if orth_norm > 1e-9:
                 orth_noise = orth_noise * (delta_norm / orth_norm)
 
-            # Corrupted weights = Global + Honest Delta + Orthogonal Noise
-            # Since tensor = global_tensor + delta, we just add orth_noise to tensor
+            # Step 5: Construct the final Corrupted Weights
+            # W_corrupted = W_global + honest_delta + orthogonal_noise
+            # Since our input 'tensor' already equals (W_global + honest_delta), we just add orth_noise.
             corrupted_weights[key] = tensor + orth_noise
             
         return corrupted_weights
