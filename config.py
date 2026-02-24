@@ -11,7 +11,7 @@ NUM_ROUNDS = 1000          # Total number of federated learning rounds
 NUM_CLIENTS = 40          # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 10   # Minimum clients to select each round
 MAX_CLIENTS_PER_ROUND = 35  # Maximum clients to select each round
-FRACTION_BYZANTINE = 0.3
+FRACTION_BYZANTINE = 0.4
 
 # --- === Experiment Mode === ---
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
@@ -22,7 +22,7 @@ COMPARE_AEGIS_SCENARIOS = False
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
-DATA_SPLIT_TYPE = 'NON_IID'
+DATA_SPLIT_TYPE = 'BALANCED_IID'
 
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 5
@@ -31,7 +31,7 @@ BATCH_SIZE = 256
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.0005      
+LEARNING_RATE = 0.001      
 MOMENTUM = 0.8            
 
 # --- === Learning Rate Decay parameters === ---
@@ -111,7 +111,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- === Early Stopping Parameters === ---
 EARLY_STOPPING_ENABLED = True
-PATIENCE = 20           # Number of rounds to wait for improvement
+PATIENCE = 10           # Number of rounds to wait for improvement
 MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
 
 # --- === Results Directory === ---
