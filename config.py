@@ -8,10 +8,10 @@ import os
 
 # --- === Simulation Parameters === ---
 NUM_ROUNDS = 1000          # Total number of federated learning rounds
-NUM_CLIENTS = 40          # Total number of clients in the pool
+NUM_CLIENTS = 30          # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 10   # Minimum clients to select each round
-MAX_CLIENTS_PER_ROUND = 35  # Maximum clients to select each round
-FRACTION_BYZANTINE = 0.4
+MAX_CLIENTS_PER_ROUND = 20  # Maximum clients to select each round
+FRACTION_BYZANTINE = 0.33
 
 # --- === Experiment Mode === ---
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
@@ -22,7 +22,7 @@ COMPARE_AEGIS_SCENARIOS = False
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
-DATA_SPLIT_TYPE = 'BALANCED_IID'
+DATA_SPLIT_TYPE = 'NON_IID'
 
 # For NON_IID: Number of classes/shards per client
 SHARDS_PER_CLIENT = 5
@@ -31,20 +31,20 @@ BATCH_SIZE = 256
 
 # --- === Client Training Parameters === ---
 LOCAL_EPOCHS = 1
-LEARNING_RATE = 0.001      
+LEARNING_RATE = 0.01      
 MOMENTUM = 0.8            
 
 # --- === Learning Rate Decay parameters === ---
 LR_DECAY_ENABLED = True
 LR_DECAY_RATE = 0.99       # Decay multiplier per round
-MIN_LR = 1e-5              # Minimum learning rate limit
+MIN_LR = 1e-4              # Minimum learning rate limit
 
 # --- === Server-Side Global Momentum Parameters === ---
 # By default, standard FedAvg/Aegis has no server memory (it just averages). 
 # Enabling Server Momentum acts like an inertia buff, preventing massive late-stage accuracy drops 
 # when a randomly selected batch of clients is highly skewed.
 SERVER_MOMENTUM_ENABLED = True     # Toggle to turn Global Momentum ON or OFF. If off, works as standard FL.
-SERVER_MOMENTUM = 0.9               # FedAvgM momentum parameter (How much past velocity to keep).
+SERVER_MOMENTUM = 0.7               # FedAvgM momentum parameter (How much past velocity to keep).
 SERVER_LEARNING_RATE = 1.0          # Server step size. 1.0 means take the full updated averaged step.
                                     # Higher values overshoot, lower values slow down global convergence.
 
@@ -81,7 +81,7 @@ ATTACK_PROBABILITY = 0.7    # Probability that a traitor attacks in a given roun
 # Each traitor picks a start round [0, NUM_ROUNDS - MIN_DURATION]
 # And a duration [MIN_DURATION, MAX_DURATION]
 ATTACK_WINDOW_MIN_DURATION = 10     # Minimum attack window length
-ATTACK_WINDOW_MAX_DURATION = 80     # Maximum attack window length
+ATTACK_WINDOW_MAX_DURATION = 50     # Maximum attack window length
 
 EXPECTED_CONVERGENCE_ROUNDS = 400   # Estimated rounds for model to converge
 ATTACK_DEADLINE_PERCENT = 0.50     # Attacks must START within this % of convergence
@@ -111,11 +111,16 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- === Early Stopping Parameters === ---
 EARLY_STOPPING_ENABLED = True
-PATIENCE = 10           # Number of rounds to wait for improvement
+PATIENCE = 40           # Number of rounds to wait for improvement
 MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
 
 # --- === Results Directory === ---
 RESULTS_DIR = r'D:\IITD\MTP 2\Results'
+
+# --- === Auto Shutdown Feature === ---
+# If True, the computer will automatically shut down after the entire script finishes.
+# Useful for leaving long simulations running overnight.
+AUTO_SHUTDOWN = True
 
 # --- === Visualization Parameters === ---
 VISUALIZE_GRADIENTS = False       # Master toggle for scatter plots
