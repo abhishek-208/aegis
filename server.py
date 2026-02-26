@@ -195,8 +195,13 @@ class Server:
                 pass
         
         # --- Step 5: Update Global Model ---
-        if new_global_weights: 
-            if config.SERVER_MOMENTUM_ENABLED:  #In case of Global Momentum
+        if new_global_weights:
+            # Server Momentum is an Aegis-specific enhancement.
+            # FedAvg, CW-Med, and Krum should use their standard weight update
+            # without any server-side memory, to ensure a fair baseline comparison.
+            agg_name = getattr(self.aggregator_func, '__name__', '') or getattr(self.aggregator_func, 'func', lambda: None).__name__
+            is_aegis = (agg_name == 'aegis')
+            if config.SERVER_MOMENTUM_ENABLED and is_aegis:  # In case of Global Momentum (Aegis only)
                 current_global_weights = self.global_model.state_dict()
                 
                 # 1. Initialize velocity buffer if it's the first round
