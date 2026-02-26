@@ -41,7 +41,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': False,  # <-- Set to False to skip the sign_flip test
+        'run': True,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -50,7 +50,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'x'
     },
     {
-        'run': False,  # <-- Set to False to skip the sign_flip test
+        'run': True,  # <-- Set to False to skip the sign_flip test
         'label': f"Aegis (With {config.ATTACK_TYPE} Attack)",
         'aggregator': aegis,
         'attack_type': config.ATTACK_TYPE,
@@ -59,7 +59,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 's' # Square
     },    
     {
-        'run': False,  
+        'run': True,  
         'label': f"CWMed (With {config.ATTACK_TYPE} Attack)",
         'aggregator': cw_med,  # <-- Use the   function
         'attack_type': config.ATTACK_TYPE,
@@ -68,7 +68,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'p'       #   marker (star)
     },
     {
-        'run': False,  
+        'run': True,  
         'label': f"Krum (With {config.ATTACK_TYPE} Attack)",
         # We use functools.partial to "pre-fill" the fraction_byzantine
         # argument that multi_krum needs.
@@ -84,7 +84,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'D'       #   marker (diamond)
     },
     {
-        'run': True,
+        'run': False,
         'label': "Aegis (No Attack)",
         'aggregator': aegis,
         'attack_type': 'none',
@@ -93,7 +93,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o'
     },
     {
-        'run': True,
+        'run': False,
         'label': "Aegis (Sign Flip)",
         'aggregator': aegis,
         'attack_type': 'sign_flip',
@@ -102,7 +102,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'x'
     },
     {
-        'run': True,
+        'run': False,
         'label': "Aegis (Additive Noise)",
         'aggregator': aegis,
         'attack_type': 'additive_noise',
@@ -111,7 +111,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 's'
     },
     {
-        'run': True,
+        'run': False,
         'label': "Aegis (Label Flip)",
         'aggregator': aegis,
         'attack_type': 'label_flip',
@@ -120,7 +120,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'p'
     },
     {
-        'run': True,
+        'run': False,
         'label': "Aegis (Orthogonal)",
         'aggregator': aegis,
         'attack_type': 'orthogonal',
@@ -426,3 +426,17 @@ if __name__ == "__main__":
         pass
         
     main()
+    
+    # --- Auto-Shutdown Logic ---
+    if getattr(config, 'AUTO_SHUTDOWN', False):
+        import platform
+        print("\n[System] AUTO_SHUTDOWN is enabled. Shutting down in 60 seconds...")
+        print("         To cancel, open a terminal and run 'shutdown -a'")
+        
+        system_platform = platform.system()
+        if system_platform == 'Windows':
+            os.system('shutdown /s /t 60')
+        elif system_platform == 'Linux' or system_platform == 'Darwin':
+            os.system('sudo shutdown -h +1')
+        else:
+            print(f"         [Warning] Auto-shutdown not supported on OS: {system_platform}")

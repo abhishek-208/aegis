@@ -46,7 +46,7 @@ def fed_avg(updates):
     """
     total_data_points = sum(n_k for _, n_k in updates)
     if not updates:
-        return OrderedDict()
+        return OrderedDict(), None
         
     template_weights = updates[0][0]
     avg_weights = OrderedDict()
@@ -71,11 +71,11 @@ def aegis(updates, current_round=None):
     print("    > Aggregator: Aegis...")
     
     if not updates:
-        return OrderedDict()
+        return OrderedDict(), None
         
-    all_flat_weights = []
-    data_sizes = []
-    template_dict = updates[0][0]
+    all_flat_weights = []   #list that will hold each client's entire model weights flattened into a single 1D tensor
+    data_sizes = []         #list that will hold the number of data points each client has (n_k)
+    template_dict = updates[0][0]   #template dictionary to store the shape and type of the model weights
     
     for weights_dict, n_k in updates:
         all_flat_weights.append(_flatten_weights(weights_dict))
@@ -156,7 +156,7 @@ def aegis(updates, current_round=None):
     
     if len(approved_indices) == 0:
         print("    > Aegis: All clients discarded as outliers! Skipping round.")
-        return None
+        return None, None
         
     print(f"    > Aegis: Approved {len(approved_indices)}/{len(updates)} clients (Rejected {len(updates) - len(approved_indices)}).")
 
@@ -194,7 +194,7 @@ def cw_med(updates):
     print("    > Aggregator: Using Coordinate-wise Median (CWMed)...")
 
     if not updates:
-        return OrderedDict()
+        return OrderedDict(), None
 
     template_dict = updates[0][0]
 
@@ -223,7 +223,7 @@ def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
     print("    > Aggregator: Using Multi-Krum...")
 
     if not updates:
-        return OrderedDict()
+        return OrderedDict(), None
 
     n = len(updates)
     # conservative integer number of Byzantines
@@ -240,7 +240,7 @@ def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
         raise ValueError("m_selected cannot be greater than number of clients")
     if r < 1 or m_selected < 1:
         print(f"    > Krum: Insufficient clients (n={n}, f={f}) to select. Skipping round.")
-        return None # Not enough clients to run Krum
+        return None, None # Not enough clients to run Krum
 
     print(f"    > Krum: n={n}, assumed f={f}, sum r={r} neighbors, selecting m={m_selected} clients")
 
@@ -289,4 +289,4 @@ def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
         new_flat = torch.mean(selected_updates, dim=0)
 
     new_global_model_dict = _unflatten_weights(new_flat, template_dict)
-    return new_global_model_dict
+    return new_global_model_dict, None
