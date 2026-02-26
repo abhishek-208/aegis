@@ -135,80 +135,190 @@ EXPERIMENT_CONFIGS = [
 # --- === OVERRIDE FOR COMPARISON MODE === ---
 if config.COMPARE_AEGIS_SCENARIOS:
     print(f"\n>>> [Config Override] Running Automated Aegis Comparison Protocol <<<")
-    EXPERIMENT_CONFIGS = [
-        # 0. Balanced IID & No Attack (Baseline)
-        {
-            'label': "Aegis (Balanced IID - No Attack)",
-            'aggregator': aegis,
-            'data_split': 'BALANCED_IID',
-            'attack_type': 'none',
-            'fraction_byzantine': 0.0,
-            'color': 'black', 'marker': 'o'
-        },
-        # 0.5. Unbalanced IID & No Attack (Baseline)
-        {
-            'label': "Aegis (Unbalanced IID - No Attack)",
-            'aggregator': aegis,
-            'data_split': 'UNBALANCED_IID',
-            'attack_type': 'none',
-            'fraction_byzantine': 0.0,
-            'color': 'black', 'marker': 'x'
-        },
-        # 1. Balanced IID & Sign Flip
-        {
-            'label': "Aegis (Balanced IID - Sign Flip)",
-            'aggregator': aegis,
-            'data_split': 'BALANCED_IID',
-            'attack_type': 'sign_flip',
-            'fraction_byzantine': config.FRACTION_BYZANTINE,
-            'color': 'r', 'marker': 'o'
-        },
-        # 2. Balanced IID & Label Flip
-        {
-            'label': "Aegis (Balanced IID - Label Flip)",
-            'aggregator': aegis,
-            'data_split': 'BALANCED_IID',
-            'attack_type': 'label_flip',
-            'fraction_byzantine': config.FRACTION_BYZANTINE,
-            'color': 'r', 'marker': 'x'
-        },
-        # 3. Unbalanced IID & Sign Flip
-        {
-            'label': "Aegis (Unbalanced IID - Sign Flip)",
-            'aggregator': aegis,
-            'data_split': 'UNBALANCED_IID',
-            'attack_type': 'sign_flip',
-            'fraction_byzantine': config.FRACTION_BYZANTINE,
-            'color': 'b', 'marker': 'o'
-        },
-        # 4. Unbalanced IID & Label Flip
-        {
-            'label': "Aegis (Unbalanced IID - Label Flip)",
-            'aggregator': aegis,
-            'data_split': 'UNBALANCED_IID',
-            'attack_type': 'label_flip',
-            'fraction_byzantine': config.FRACTION_BYZANTINE,
-            'color': 'b', 'marker': 'x'
-        },
-        # 5. Balanced IID & Additive Noise
-        {
-            'label': "Aegis (Balanced IID - Additive Noise)",
-            'aggregator': aegis,
-            'data_split': 'BALANCED_IID',
-            'attack_type': 'additive_noise',
-            'fraction_byzantine': config.FRACTION_BYZANTINE,
-            'color': 'g', 'marker': 'o'
-        },
-        # 6. Unbalanced IID & Additive Noise
-        {
-            'label': "Aegis (Unbalanced IID - Additive Noise)",
-            'aggregator': aegis,
-            'data_split': 'UNBALANCED_IID',
-            'attack_type': 'additive_noise',
-            'fraction_byzantine': config.FRACTION_BYZANTINE,
-            'color': 'g', 'marker': 'x'
-        }
-    ]
+
+    # --- Master Toggles: Switch entire data-split groups ON/OFF ---
+    RUN_BALANCED_IID   = False
+    RUN_UNBALANCED_IID = False
+    RUN_NON_IID        = True
+
+    EXPERIMENT_CONFIGS = []
+
+    # ======================== BALANCED IID ========================
+    if RUN_BALANCED_IID:
+        EXPERIMENT_CONFIGS += [
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - No Attack)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'none',
+                'fraction_byzantine': 0.0,
+                'color': 'black', 'marker': 'o'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Sign Flip)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'sign_flip',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'r', 'marker': 'o'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Label Flip)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'label_flip',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'r', 'marker': 'x'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Additive Noise)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'additive_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'g', 'marker': 'o'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Orthogonal)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'orthogonal',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'orange', 'marker': 'o'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Volume Spam)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'volume_spam',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'cyan', 'marker': 'o'
+            },
+        ]
+
+    # ====================== UNBALANCED IID =======================
+    if RUN_UNBALANCED_IID:
+        EXPERIMENT_CONFIGS += [
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - No Attack)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'none',
+                'fraction_byzantine': 0.0,
+                'color': 'black', 'marker': 'x'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Sign Flip)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'sign_flip',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'b', 'marker': 'o'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Label Flip)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'label_flip',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'b', 'marker': 'x'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Additive Noise)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'additive_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'g', 'marker': 'x'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Orthogonal)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'orthogonal',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'orange', 'marker': 'x'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Volume Spam)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'volume_spam',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'cyan', 'marker': 'x'
+            },
+        ]
+
+    # =========================== NON-IID ===========================
+    if RUN_NON_IID:
+        EXPERIMENT_CONFIGS += [
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - No Attack)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'none',
+                'fraction_byzantine': 0.0,
+                'color': 'black', 'marker': 'D'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - Sign Flip)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'sign_flip',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'r', 'marker': 'D'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - Label Flip)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'label_flip',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'r', 'marker': '^'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - Additive Noise)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'additive_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'g', 'marker': 'D'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - Orthogonal)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'orthogonal',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'orange', 'marker': 'D'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - Volume Spam)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'volume_spam',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': 'cyan', 'marker': 'D'
+            },
+        ]
 
 # --- === 2. SIMULATION RUNNER === ---
 

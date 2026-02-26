@@ -16,7 +16,7 @@ FRACTION_BYZANTINE = 0.33
 # --- === Experiment Mode === ---
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
 # Set to False to run the standard manual experiments list in main.py.
-COMPARE_AEGIS_SCENARIOS = False
+COMPARE_AEGIS_SCENARIOS = True
 
 # --- === Model & Data Parameters === ---
 MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
