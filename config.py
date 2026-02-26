@@ -19,7 +19,7 @@ FRACTION_BYZANTINE = 0.33
 COMPARE_AEGIS_SCENARIOS = True
 
 # --- === Model & Data Parameters === ---
-MODEL_TYPE = 'CNN'        # 'MLP' for MNIST, 'CNN' for CIFAR10
+MODEL_TYPE = 'ImprovedCNN'  # 'MLP' for MNIST, 'CNN' (LeNet-5) or 'ImprovedCNN' (BatchNorm+Dropout) for CIFAR10
 DATASET_NAME = 'CIFAR10'    
 # DATA_SPLIT_TYPE can be: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
 DATA_SPLIT_TYPE = 'NON_IID'

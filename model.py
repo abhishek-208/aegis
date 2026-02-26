@@ -85,23 +85,81 @@ class CNN(nn.Module):
         return x
     
 
+# --- === 3. Improved CNN (for CIFAR-10) === ---
+class ImprovedCNN(nn.Module):
+    """
+    An improved CNN for CIFAR-10 with BatchNorm and Dropout.
+    ~290K parameters — roughly 5x larger than LeNet-5 but still lightweight.
+    
+    Architecture: Two double-conv blocks with BatchNorm, followed by
+    a fully connected classifier with Dropout for regularization.
+    
+    Input shape: (Batch_size, 3, 32, 32)
+    """
+    def __init__(self):
+        super(ImprovedCNN, self).__init__()
+        
+        # --- Block 1: 3 → 32 channels ---
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)    # (B, 32, 32, 32)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)   # (B, 32, 32, 32)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.pool1 = nn.MaxPool2d(2, 2)                            # (B, 32, 16, 16)
+        
+        # --- Block 2: 32 → 64 channels ---
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)   # (B, 64, 16, 16)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)   # (B, 64, 16, 16)
+        self.bn4 = nn.BatchNorm2d(64)
+        self.pool2 = nn.MaxPool2d(2, 2)                            # (B, 64, 8, 8)
+        
+        # --- Classifier ---
+        # Flattened: 64 * 8 * 8 = 4096
+        self.fc1 = nn.Linear(64 * 8 * 8, 256)
+        self.dropout = nn.Dropout(0.25)
+        self.fc2 = nn.Linear(256, 10)
+    
+    def forward(self, x):
+        # Block 1
+        x = F.relu(self.bn1(self.conv1(x)))    # (B, 32, 32, 32)
+        x = self.pool1(F.relu(self.bn2(self.conv2(x))))  # (B, 32, 16, 16)
+        
+        # Block 2
+        x = F.relu(self.bn3(self.conv3(x)))    # (B, 64, 16, 16)
+        x = self.pool2(F.relu(self.bn4(self.conv4(x))))  # (B, 64, 8, 8)
+        
+        # Classifier
+        x = x.view(-1, 64 * 8 * 8)            # (B, 4096)
+        x = F.relu(self.fc1(x))                # (B, 256)
+        x = self.dropout(x)
+        x = self.fc2(x)                        # (B, 10)
+        return x
+
 
 def get_model():
     """
     Helper factory function to instantiate the correct model
     based on the config file.
+    
+    Supported MODEL_TYPE values:
+    - 'MLP': Simple MLP for MNIST (2 hidden layers)
+    - 'CNN': LeNet-5 for CIFAR-10 (~62K params)
+    - 'ImprovedCNN': Improved CNN for CIFAR-10 (~290K params, BatchNorm + Dropout)
     """
     if config.MODEL_TYPE == 'MLP':
-        # Check if we are using the wrong dataset
         if config.DATASET_NAME != 'MNIST':
             print(f"Warning: Using an MLP model for {config.DATASET_NAME}. This may perform poorly.")
         return MLP()
         
     elif config.MODEL_TYPE == 'CNN':
-        # Check if we are using the wrong dataset
         if config.DATASET_NAME != 'CIFAR10':
             print(f"Warning: Using a CNN model for {config.DATASET_NAME}. Check input dimensions.")
         return CNN()
+    
+    elif config.MODEL_TYPE == 'ImprovedCNN':
+        if config.DATASET_NAME != 'CIFAR10':
+            print(f"Warning: Using ImprovedCNN model for {config.DATASET_NAME}. Check input dimensions.")
+        return ImprovedCNN()
         
     else:
         raise ValueError(f"Unknown MODEL_TYPE in config: {config.MODEL_TYPE}")
