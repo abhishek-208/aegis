@@ -32,20 +32,13 @@ def load_data():
         test_dataset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
         
     elif config.DATASET_NAME == 'CIFAR10':
-        # Training transform with data augmentation for better generalization
-        train_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomCrop(32, padding=4),
+        # Standard CIFAR-10 normalization (no augmentation to avoid CPU bottleneck)
+        transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         ])
-        # Test transform without augmentation (clean evaluation)
-        test_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-        ])
-        train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=train_transform)
-        test_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=test_transform)
+        train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+        test_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
     else:
         raise ValueError(f"Unknown DATASET_NAME: {config.DATASET_NAME}")
     

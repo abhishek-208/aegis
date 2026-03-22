@@ -158,7 +158,7 @@ class Server:
         # Aggregator now returns (weights, stats) tuple
         # Pass current_round for adaptive thresholding (aegis uses it, others ignore it)
         try:
-            new_global_weights, agg_stats = self.aggregator_func(updates, current_round=current_round)
+            new_global_weights, agg_stats = self.aggregator_func(updates, current_round=current_round, global_model=global_weights_cpu)
         except TypeError:
             # Aggregator doesn't accept current_round (e.g., fed_avg, cw_med, multi_krum)
             new_global_weights, agg_stats = self.aggregator_func(updates)

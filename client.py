@@ -162,8 +162,8 @@ class Client:
             if attack_type == 'volume_spam':
                 # Report a massively inflated data size (1 Billion)
                 # Aegis clips this to 2.0 * avg, maximizing our weight.
-                return corrupted_weights, 1_000_000_000
+                return self.client_id, corrupted_weights, 1_000_000_000
             
-            return corrupted_weights, len(self.dataloader.dataset)
+            return self.client_id, corrupted_weights, len(self.dataloader.dataset)
         else:
-            return local_weights, len(self.dataloader.dataset)
+            return self.client_id, local_weights, len(self.dataloader.dataset)

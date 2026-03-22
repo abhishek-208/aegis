@@ -16,7 +16,7 @@ FRACTION_BYZANTINE = 0.33
 # --- === Experiment Mode === ---
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
 # Set to False to run the standard manual experiments list in main.py.
-COMPARE_AEGIS_SCENARIOS = True
+COMPARE_AEGIS_SCENARIOS = False
 
 # --- === Model & Data Parameters === ---
 MODEL_TYPE = 'ImprovedCNN'  # 'MLP' for MNIST, 'CNN' (LeNet-5) or 'ImprovedCNN' (BatchNorm+Dropout) for CIFAR10
@@ -73,7 +73,7 @@ ATTACK_NOISE_STD = 2.0
 
 # ATTACK_TYPE:
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
-ATTACK_TYPE = 'label_flip' 
+ATTACK_TYPE = 'sign_flip' 
 ATTACK_PROBABILITY = 0.7    # Probability that a traitor attacks in a given round
 
 # --- === Attack Timeline Parameters === ---
@@ -88,7 +88,7 @@ ATTACK_DEADLINE_PERCENT = 0.50     # Attacks must START within this % of converg
 ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)
 
 # --- === Performance Optimizations === ---
-EVALUATE_EVERY_N_ROUNDS = 1
+EVALUATE_EVERY_N_ROUNDS = 2
 
 # --- MULTIPROCESSING CONTROL (Decoupled) ---
 
@@ -96,13 +96,13 @@ EVALUATE_EVERY_N_ROUNDS = 1
 # How many clients train simultaneously. 
 #.
 # If None, it uses all available cores.
-MAX_PARALLEL_CLIENTS = 20 
+MAX_PARALLEL_CLIENTS = 12
 
 # 2. DATALOADER_WORKERS:
 # How many subprocesses each DataLoader uses to load data.
 # RECOMMENDATION: Keep at 0 when using Multiprocessing for clients.
 # If you set this > 0, you get (MAX_PARALLEL_CLIENTS * DATALOADER_WORKERS) total threads.
-DATALOADER_WORKERS = 0
+DATALOADER_WORKERS = 0  # MUST stay 0 — setting >0 with parallel clients causes RAM deadlock
 
 # --- === System Parameters === ---
 # SERVER_DEVICE: The server (aggregation/eval) uses GPU.
@@ -120,7 +120,7 @@ RESULTS_DIR = r'D:\IITD\MTP 2\Results'
 # --- === Auto Shutdown Feature === ---
 # If True, the computer will automatically shut down after the entire script finishes.
 # Useful for leaving long simulations running overnight.
-AUTO_SHUTDOWN = True
+AUTO_SHUTDOWN = False
 
 # --- === Visualization Parameters === ---
 VISUALIZE_GRADIENTS = False       # Master toggle for scatter plots

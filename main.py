@@ -20,7 +20,7 @@ from model import get_model
 from data_utils import load_data, partition_data, get_test_dataloader
 from client import Client
 from server import Server
-from aggregator import fed_avg, aegis, multi_krum, cw_med
+from aggregator import fed_avg, aegis, multi_krum, cw_med, fools_gold, reset_foolsgold_history
 import plotter
 
 # --- === 1. DEFINE EXPERIMENTS === ---
@@ -41,7 +41,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': False,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -59,7 +59,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 's' # Square
     },    
     {
-        'run': True,  
+        'run': False,  
         'label': f"CWMed (With {config.ATTACK_TYPE} Attack)",
         'aggregator': cw_med,  # <-- Use the   function
         'attack_type': config.ATTACK_TYPE,
@@ -68,7 +68,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'p'       #   marker (star)
     },
     {
-        'run': True,  
+        'run': False,  
         'label': f"Krum (With {config.ATTACK_TYPE} Attack)",
         # We use functools.partial to "pre-fill" the fraction_byzantine
         # argument that multi_krum needs.
@@ -84,62 +84,24 @@ EXPERIMENT_CONFIGS = [
         'marker': 'D'       #   marker (diamond)
     },
     {
-        'run': False,
-        'label': "Aegis (No Attack)",
-        'aggregator': aegis,
-        'attack_type': 'none',
-        'fraction_byzantine': 0.0,
-        'color': 'b',
-        'marker': 'o'
-    },
-    {
-        'run': False,
-        'label': "Aegis (Sign Flip)",
-        'aggregator': aegis,
-        'attack_type': 'sign_flip',
+        'run': True,  # <-- Set to True to run FoolsGold
+        'label': f"FoolsGold (With {config.ATTACK_TYPE} Attack)",
+        'aggregator': fools_gold,
+        'attack_type': config.ATTACK_TYPE,
         'fraction_byzantine': config.FRACTION_BYZANTINE,
-        'color': 'r',
-        'marker': 'x'
-    },
-    {
-        'run': False,
-        'label': "Aegis (Additive Noise)",
-        'aggregator': aegis,
-        'attack_type': 'additive_noise',
-        'fraction_byzantine': config.FRACTION_BYZANTINE,
-        'color': 'g',
-        'marker': 's'
-    },
-    {
-        'run': False,
-        'label': "Aegis (Label Flip)",
-        'aggregator': aegis,
-        'attack_type': 'label_flip',
-        'fraction_byzantine': config.FRACTION_BYZANTINE,
-        'color': 'magenta',
-        'marker': 'p'
-    },
-    {
-        'run': False,
-        'label': "Aegis (Orthogonal)",
-        'aggregator': aegis,
-        'attack_type': 'orthogonal',
-        'fraction_byzantine': config.FRACTION_BYZANTINE,
-        'color': 'black',
-        'marker': 'D'
-    }
-
-    
+        'color': '#e67e22',   # Orange
+        'marker': '^'         # Triangle up
+    }      
 ]
 
-# --- === OVERRIDE FOR COMPARISON MODE === ---
+# --- === OVERRIDE FOR Self COMPARISON MODE === ---
 if config.COMPARE_AEGIS_SCENARIOS:
     print(f"\n>>> [Config Override] Running Automated Aegis Comparison Protocol <<<")
 
     # --- Master Toggles: Switch entire data-split groups ON/OFF ---
     RUN_BALANCED_IID   = False
     RUN_UNBALANCED_IID = False
-    RUN_NON_IID        = True
+    RUN_NON_IID        = False
 
     EXPERIMENT_CONFIGS = []
 
@@ -153,7 +115,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'BALANCED_IID',
                 'attack_type': 'none',
                 'fraction_byzantine': 0.0,
-                'color': 'black', 'marker': 'o'
+                'color': '#2ecc71'
             },
             {
                 'run': True,
@@ -162,7 +124,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'BALANCED_IID',
                 'attack_type': 'sign_flip',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'r', 'marker': 'o'
+                'color': '#e74c3c'
             },
             {
                 'run': True,
@@ -171,7 +133,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'BALANCED_IID',
                 'attack_type': 'label_flip',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'r', 'marker': 'x'
+                'color': '#9b59b6'
             },
             {
                 'run': True,
@@ -180,7 +142,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'BALANCED_IID',
                 'attack_type': 'additive_noise',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'g', 'marker': 'o'
+                'color': '#3498db'
             },
             {
                 'run': True,
@@ -189,7 +151,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'BALANCED_IID',
                 'attack_type': 'orthogonal',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'orange', 'marker': 'o'
+                'color': '#e67e22'
             },
             {
                 'run': True,
@@ -198,7 +160,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'BALANCED_IID',
                 'attack_type': 'volume_spam',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'cyan', 'marker': 'o'
+                'color': '#1abc9c'
             },
         ]
 
@@ -212,7 +174,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'UNBALANCED_IID',
                 'attack_type': 'none',
                 'fraction_byzantine': 0.0,
-                'color': 'black', 'marker': 'x'
+                'color': '#27ae60'
             },
             {
                 'run': True,
@@ -221,7 +183,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'UNBALANCED_IID',
                 'attack_type': 'sign_flip',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'b', 'marker': 'o'
+                'color': '#c0392b'
             },
             {
                 'run': True,
@@ -230,7 +192,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'UNBALANCED_IID',
                 'attack_type': 'label_flip',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'b', 'marker': 'x'
+                'color': '#8e44ad'
             },
             {
                 'run': True,
@@ -239,7 +201,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'UNBALANCED_IID',
                 'attack_type': 'additive_noise',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'g', 'marker': 'x'
+                'color': '#2980b9'
             },
             {
                 'run': True,
@@ -248,7 +210,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'UNBALANCED_IID',
                 'attack_type': 'orthogonal',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'orange', 'marker': 'x'
+                'color': '#d35400'
             },
             {
                 'run': True,
@@ -257,7 +219,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'UNBALANCED_IID',
                 'attack_type': 'volume_spam',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'cyan', 'marker': 'x'
+                'color': '#16a085'
             },
         ]
 
@@ -271,7 +233,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'NON_IID',
                 'attack_type': 'none',
                 'fraction_byzantine': 0.0,
-                'color': 'black', 'marker': 'D'
+                'color': '#2ecc71'
             },
             {
                 'run': True,
@@ -280,7 +242,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'NON_IID',
                 'attack_type': 'sign_flip',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'r', 'marker': 'D'
+                'color': '#e74c3c'
             },
             {
                 'run': True,
@@ -289,7 +251,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'NON_IID',
                 'attack_type': 'label_flip',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'r', 'marker': '^'
+                'color': '#9b59b6'
             },
             {
                 'run': True,
@@ -298,7 +260,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'NON_IID',
                 'attack_type': 'additive_noise',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'g', 'marker': 'D'
+                'color': '#3498db'
             },
             {
                 'run': True,
@@ -307,7 +269,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'NON_IID',
                 'attack_type': 'orthogonal',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'orange', 'marker': 'D'
+                'color': '#e67e22'
             },
             {
                 'run': True,
@@ -316,7 +278,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'data_split': 'NON_IID',
                 'attack_type': 'volume_spam',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': 'cyan', 'marker': 'D'
+                'color': '#1abc9c'
             },
         ]
 
@@ -336,6 +298,9 @@ def run_simulation(exp_config):
     
     print(f"\n\n------------------------------- Starting Experiment: {exp_config['label']} -------------------------------")
     exp_start_time = time.time()
+    
+    # Reset FoolsGold state to prevent cross-experiment contamination
+    reset_foolsgold_history()
     
     # --- Profiling: Initialize Timers ---
     timing_summary = {

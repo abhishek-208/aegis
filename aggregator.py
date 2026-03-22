@@ -6,6 +6,7 @@ Contains:
 2. `aegis(updates)`: Our Byzantine-resilient method (Aegis).
 3. `cw_med(updates)`: Coordinate-wise Median (Corrected version).
 4. `multi_krum(updates, ...)`: Multi-Krum (Corrected version).
+5. `fools_gold(updates, global_model)`: FoolsGold (Non-IID baseline).
 """
 
 import torch
@@ -15,6 +16,16 @@ from collections import OrderedDict
 from config import (DEVICE, OUTLIER_SENSITIVITY, RWA_EPSILON,
                      ADAPTIVE_THRESHOLD_ENABLED, K_MAX, K_MIN,
                      WARMUP_ROUNDS, VARIANCE_SENSITIVITY, K_SAFE_FLOOR)
+
+# --- === FOOLSGOLD STATE === ---
+# Persistent per-client gradient history across rounds.
+# Key: client_id, Value: running sum of flattened deltas (1D tensor).
+FOOLSGOLD_HISTORY = {}
+
+def reset_foolsgold_history():
+    """Clears FoolsGold history. Call before each experiment."""
+    global FOOLSGOLD_HISTORY
+    FOOLSGOLD_HISTORY = {}
 
 # --- === HELPER FUNCTIONS FOR Aegis/Krum/CWMed === ---
 
@@ -40,24 +51,28 @@ def _unflatten_weights(flat_tensor, template_dict):
 # --- ================================== ---
 
 
-def fed_avg(updates):
+def fed_avg(updates, **kwargs):
     """
     Performs standard Federated Averaging (weighted by data size).
     """
-    total_data_points = sum(n_k for _, n_k in updates)
     if not updates:
         return OrderedDict(), None
-        
-    template_weights = updates[0][0]
+
+    total_data_points = sum(n_k for _, _, n_k in updates)
+    template_weights = updates[0][1]
     avg_weights = OrderedDict()
     
     for key in template_weights:
-        avg_weights[key] = torch.zeros_like(template_weights[key], device=DEVICE)
+        avg_weights[key] = torch.zeros_like(template_weights[key], device=DEVICE, dtype=torch.float32)
 
-    for client_weights, n_k in updates:
+    for _, client_weights, n_k in updates:
         weight = n_k / total_data_points
         for key in client_weights:
-            avg_weights[key] += client_weights[key].to(DEVICE) * weight
+            avg_weights[key] += client_weights[key].to(DEVICE).float() * weight
+    
+    # Cast back to original dtypes (e.g., BatchNorm's num_batches_tracked needs Long)
+    for key in template_weights:
+        avg_weights[key] = avg_weights[key].to(template_weights[key].dtype)
             
     return avg_weights, None # No stats for FedAvg
 
@@ -75,9 +90,9 @@ def aegis(updates, current_round=None):
         
     all_flat_weights = []   #list that will hold each client's entire model weights flattened into a single 1D tensor
     data_sizes = []         #list that will hold the number of data points each client has (n_k)
-    template_dict = updates[0][0]   #template dictionary to store the shape and type of the model weights
+    template_dict = updates[0][1]   #template dictionary to store the shape and type of the model weights
     
-    for weights_dict, n_k in updates:
+    for _, weights_dict, n_k in updates:
         all_flat_weights.append(_flatten_weights(weights_dict))
         data_sizes.append(n_k)
         
@@ -190,17 +205,17 @@ def aegis(updates, current_round=None):
     
     return new_global_model_dict, stats
 
-def cw_med(updates):
+def cw_med(updates, **kwargs):
     print("    > Aggregator: Using Coordinate-wise Median (CWMed)...")
 
     if not updates:
         return OrderedDict(), None
 
-    template_dict = updates[0][0]
+    template_dict = updates[0][1]
 
     # Build matrix: (num_clients, dim)
     all_flat = []
-    for weights_dict, n_k in updates:
+    for _, weights_dict, n_k in updates:
         flat = _flatten_weights(weights_dict)
         all_flat.append(flat)
 
@@ -244,12 +259,12 @@ def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
 
     print(f"    > Krum: n={n}, assumed f={f}, sum r={r} neighbors, selecting m={m_selected} clients")
 
-    template_dict = updates[0][0]
+    template_dict = updates[0][1]
 
     # Build matrix
     all_flat = []
     sample_sizes = []
-    for weights_dict, n_k in updates:
+    for _, weights_dict, n_k in updates:
         all_flat.append(_flatten_weights(weights_dict))
         sample_sizes.append(n_k)
 
@@ -290,3 +305,117 @@ def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
 
     new_global_model_dict = _unflatten_weights(new_flat, template_dict)
     return new_global_model_dict, None
+
+
+# --- === FOOLSGOLD AGGREGATOR === ---
+
+def fools_gold(updates, global_model=None, **kwargs):
+    """
+    FoolsGold aggregation (Fung et al., 2020).
+    
+    Penalizes Sybil/colluding attackers by tracking *historical* gradient
+    contributions and computing pairwise cosine similarity. Clients whose
+    historical updates look very similar to others receive near-zero weight.
+    
+    Designed as a baseline for Non-IID scenarios where honest clients
+    naturally have diverse gradients.
+    
+    Args:
+        updates: list of (client_id, weights_dict, num_samples).
+        global_model: the current global model state_dict (OrderedDict).
+    
+    Returns:
+        (new_global_model_dict, None)
+    """
+    global FOOLSGOLD_HISTORY
+    
+    print("    > Aggregator: FoolsGold...")
+    
+    if not updates:
+        return OrderedDict(), None
+    
+    if global_model is None:
+        raise ValueError("FoolsGold requires `global_model` keyword argument.")
+    
+    n_clients = len(updates)
+    template_dict = updates[0][1]
+    
+    # --- Step 1: Flatten the global model ---
+    flat_global = _flatten_weights(global_model)
+    
+    # --- Step 2: Compute deltas and update history ---
+    client_ids = []
+    flat_deltas = []       # Current round deltas (for reference)
+    weight_dicts = []      # Current round state_dicts (for final aggregation)
+    
+    for client_id, weights_dict, n_k in updates:
+        client_ids.append(client_id)
+        weight_dicts.append(weights_dict)
+        
+        # Delta: client_weights - global_weights
+        flat_client = _flatten_weights(weights_dict)
+        delta = flat_client - flat_global  # 1D tensor on DEVICE
+        flat_deltas.append(delta)
+        
+        # Accumulate into history
+        if client_id not in FOOLSGOLD_HISTORY:
+            FOOLSGOLD_HISTORY[client_id] = delta.clone()
+        else:
+            FOOLSGOLD_HISTORY[client_id] = FOOLSGOLD_HISTORY[client_id].to(DEVICE) + delta
+    
+    # --- Step 3: Build history matrix for participating clients ---
+    # Shape: (n_clients, dim)
+    history_matrix = torch.stack([FOOLSGOLD_HISTORY[cid].to(DEVICE) for cid in client_ids])
+    
+    # --- Step 4: Pairwise cosine similarity ---
+    # Normalize each row to unit length
+    norms = torch.norm(history_matrix, dim=1, keepdim=True).clamp(min=1e-12)
+    normed = history_matrix / norms
+    
+    # Cosine similarity matrix: (n_clients, n_clients)
+    cs_matrix = torch.mm(normed, normed.t())  # O(n^2) pairwise
+    
+    # --- Step 5: FoolsGold Scoring ---
+    # For each client i, find max similarity to any OTHER client j
+    # Set diagonal to -inf so self-similarity is ignored
+    cs_matrix.fill_diagonal_(-float('inf'))
+    v, _ = torch.max(cs_matrix, dim=1)  # v_i = max_{j != i} cos_sim(h_i, h_j)
+    
+    # Clamp v to [0, 1] — negative similarities mean very different, no penalty
+    v = torch.clamp(v, min=0.0, max=1.0)
+    
+    # Raw penalty: score = 1 - v  (high similarity → low score)
+    scores = 1.0 - v
+    
+    # Log-penalty transformation (standard FoolsGold formula)
+    # Amplifies the gap: honest diverse clients keep high scores,
+    # while near-identical Sybils get penalized exponentially.
+    epsilon = 1e-9
+    scores = scores * (torch.log(torch.clamp(scores, min=epsilon) + 1.0) / math.log(2.0))
+    
+    # --- Step 6: Normalize to sum to 1 ---
+    total_score = torch.sum(scores)
+    if total_score < epsilon:
+        # All clients look identical — fall back to uniform weights
+        print("    > FoolsGold: All scores ~0. Using uniform weights.")
+        final_weights = torch.ones(n_clients, device=DEVICE) / n_clients
+    else:
+        final_weights = scores / total_score
+    
+    # --- Step 7: Weighted aggregation of CURRENT round state_dicts ---
+    new_global_dict = OrderedDict()
+    for key in template_dict:
+        new_global_dict[key] = torch.zeros_like(template_dict[key], device=DEVICE, dtype=torch.float32)
+    
+    for i, weights_dict in enumerate(weight_dicts):
+        w_i = final_weights[i].item()
+        for key in weights_dict:
+            new_global_dict[key] += weights_dict[key].to(DEVICE).float() * w_i
+    
+    # Cast back to original dtypes
+    for key in template_dict:
+        new_global_dict[key] = new_global_dict[key].to(template_dict[key].dtype)
+    
+    print(f"    > FoolsGold: Weights = {[f'{w:.4f}' for w in final_weights.cpu().tolist()]}")
+    
+    return new_global_dict, None
