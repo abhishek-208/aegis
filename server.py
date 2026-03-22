@@ -211,21 +211,33 @@ class Server:
                         self.server_momentum_buffer[k] = torch.zeros_like(v, device=self.device)
                 
                 # 2. Compute Pseudo-Gradient and Apply Momentum
+                # IMPORTANT: Skip momentum for BatchNorm running stats (running_mean,
+                # running_var, num_batches_tracked). These are NOT learnable parameters —
+                # they are exponential moving averages maintained during training.
+                # Applying momentum can push running_var negative → sqrt(negative) → NaN.
+                _BN_STATS = {'running_mean', 'running_var', 'num_batches_tracked'}
+                
                 final_weights = {}
                 for k in new_global_weights.keys():
-                    v_current = current_global_weights[k].to(self.device)
-                    v_new = new_global_weights[k].to(self.device)
+                    # Check if this key ends with a BatchNorm stat name
+                    is_bn_stat = any(k.endswith(s) for s in _BN_STATS)
                     
-                    # Pseudo-Gradient: The direction the clients *want* the server to move.
-                    pseudo_grad = v_new - v_current
-                    
-                    # Velocity Update: V_t = (Momentum * V_t-1) + Pseudo-Gradient
-                    # We keep a fraction of the previous velocity (inertia) and add the current push.
-                    velocity = (config.SERVER_MOMENTUM * self.server_momentum_buffer[k]) + pseudo_grad
-                    self.server_momentum_buffer[k] = velocity
-                    
-                    # Final Model Update: W_t = W_t-1 + (Learning_Rate * V_t)
-                    final_weights[k] = v_current + (config.SERVER_LEARNING_RATE * velocity)
+                    if is_bn_stat:
+                        # Directly use the aggregated value (no momentum)
+                        final_weights[k] = new_global_weights[k].to(self.device)
+                    else:
+                        v_current = current_global_weights[k].to(self.device)
+                        v_new = new_global_weights[k].to(self.device)
+                        
+                        # Pseudo-Gradient: The direction the clients *want* the server to move.
+                        pseudo_grad = v_new - v_current
+                        
+                        # Velocity Update: V_t = (Momentum * V_t-1) + Pseudo-Gradient
+                        velocity = (config.SERVER_MOMENTUM * self.server_momentum_buffer[k]) + pseudo_grad
+                        self.server_momentum_buffer[k] = velocity
+                        
+                        # Final Model Update: W_t = W_t-1 + (Learning_Rate * V_t)
+                        final_weights[k] = v_current + (config.SERVER_LEARNING_RATE * velocity)
                     
                 self.global_model.load_state_dict(final_weights)
             else:
