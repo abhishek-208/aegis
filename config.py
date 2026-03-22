@@ -65,6 +65,12 @@ K_SAFE_FLOOR = 4.5                 # Absolute minimum k, even with low variance 
 VARIANCE_SENSITIVITY = 3.0          # How much to relax k when updates are spread out
 RWA_EPSILON = 1e-9
 
+# --- === FoolsGold Parameters === ---
+# κ (kappa): Confidence parameter for the logit transform.
+# Higher values → more aggressive penalty for similar clients.
+# Paper default: 1.0
+FOOLSGOLD_KAPPA = 1.0
+
 # --- === Attack Parameters === ---
 # ATTACK_NOISE_STD:
 # For Mean Shift (additive_noise), this is the magnitude of the shift.

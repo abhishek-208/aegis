@@ -15,7 +15,8 @@ import math  # <-- ADDED for math.floor
 from collections import OrderedDict
 from config import (DEVICE, OUTLIER_SENSITIVITY, RWA_EPSILON,
                      ADAPTIVE_THRESHOLD_ENABLED, K_MAX, K_MIN,
-                     WARMUP_ROUNDS, VARIANCE_SENSITIVITY, K_SAFE_FLOOR)
+                     WARMUP_ROUNDS, VARIANCE_SENSITIVITY, K_SAFE_FLOOR,
+                     FOOLSGOLD_KAPPA)
 
 # --- === FOOLSGOLD STATE === ---
 # Persistent per-client gradient history across rounds.
@@ -311,14 +312,20 @@ def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
 
 def fools_gold(updates, global_model=None, **kwargs):
     """
-    FoolsGold aggregation (Fung et al., 2020).
+    FoolsGold aggregation — Fung et al., 2020.
     
     Penalizes Sybil/colluding attackers by tracking *historical* gradient
-    contributions and computing pairwise cosine similarity. Clients whose
-    historical updates look very similar to others receive near-zero weight.
+    contributions on **indicative features** (last FC layer) and computing
+    pairwise cosine similarity with per-class normalization.
     
-    Designed as a baseline for Non-IID scenarios where honest clients
-    naturally have diverse gradients.
+    Paper algorithm:
+      1. Track history H_i on the last FC layer (indicative features).
+      2. Normalize H_i per class (row-wise L2 normalization).
+      3. Compute pairwise cosine similarity on normalized, flattened H.
+      4. v_i = max_{j≠i} cos_sim(H_i, H_j).
+      5. α_i = 1 - v_i.
+      6. Logit transform: α_i = κ · (ln(α_i / (1 - α_i)) + 0.5), clamp to [0,1].
+      7. Update: w_{t+1} = w_t + (1/n) · Σ α_i · Δ_i  (no sum-to-1 normalization).
     
     Args:
         updates: list of (client_id, weights_dict, num_samples).
@@ -340,82 +347,93 @@ def fools_gold(updates, global_model=None, **kwargs):
     n_clients = len(updates)
     template_dict = updates[0][1]
     
-    # --- Step 1: Flatten the global model ---
-    flat_global = _flatten_weights(global_model)
+    # --- Step 1: Identify the indicative feature layer (last FC layer) ---
+    # The paper uses only the output layer for similarity computation.
+    # Find the last key ending in '.weight' with a 2D shape (Linear layer).
+    indicator_key = None
+    for key in template_dict.keys():
+        if key.endswith('.weight') and template_dict[key].dim() == 2:
+            indicator_key = key
     
-    # --- Step 2: Compute deltas and update history ---
+    if indicator_key is None:
+        raise ValueError("FoolsGold: Could not find a Linear layer for indicative features.")
+    
+    # --- Step 2: Compute full deltas and update indicative feature history ---
     client_ids = []
-    flat_deltas = []       # Current round deltas (for reference)
-    weight_dicts = []      # Current round state_dicts (for final aggregation)
+    client_deltas = []  # Full model deltas for final aggregation
     
     for client_id, weights_dict, n_k in updates:
         client_ids.append(client_id)
-        weight_dicts.append(weights_dict)
         
-        # Delta: client_weights - global_weights
-        flat_client = _flatten_weights(weights_dict)
-        delta = flat_client - flat_global  # 1D tensor on DEVICE
-        flat_deltas.append(delta)
+        # Full model delta: Δ_i = w_i - w_global (for every layer)
+        full_delta = OrderedDict()
+        for key in weights_dict:
+            full_delta[key] = (weights_dict[key].to(DEVICE).float() -
+                               global_model[key].to(DEVICE).float())
+        client_deltas.append(full_delta)
         
-        # Accumulate into history
+        # Indicative feature delta: only the last FC layer
+        indicator_delta = full_delta[indicator_key]  # Shape: (num_classes, num_features)
+        
+        # Accumulate into history: H_i += Δ_indicator_i
         if client_id not in FOOLSGOLD_HISTORY:
-            FOOLSGOLD_HISTORY[client_id] = delta.clone()
+            FOOLSGOLD_HISTORY[client_id] = indicator_delta.clone()
         else:
-            FOOLSGOLD_HISTORY[client_id] = FOOLSGOLD_HISTORY[client_id].to(DEVICE) + delta
+            FOOLSGOLD_HISTORY[client_id] = FOOLSGOLD_HISTORY[client_id].to(DEVICE) + indicator_delta
     
-    # --- Step 3: Build history matrix for participating clients ---
-    # Shape: (n_clients, dim)
-    history_matrix = torch.stack([FOOLSGOLD_HISTORY[cid].to(DEVICE) for cid in client_ids])
+    # --- Step 3: Per-class (row-wise) L2 normalization of history ---
+    # Each H_i has shape (num_classes, num_features).
+    # Normalize each row (class) to unit norm before similarity computation.
+    normalized_histories = []
+    for cid in client_ids:
+        h = FOOLSGOLD_HISTORY[cid].to(DEVICE)  # (num_classes, num_features)
+        row_norms = torch.norm(h, dim=1, keepdim=True).clamp(min=1e-12)
+        h_normed = h / row_norms
+        normalized_histories.append(h_normed.flatten())  # Flatten for cosine sim
+    
+    history_matrix = torch.stack(normalized_histories)  # (n_clients, num_classes * num_features)
     
     # --- Step 4: Pairwise cosine similarity ---
-    # Normalize each row to unit length
     norms = torch.norm(history_matrix, dim=1, keepdim=True).clamp(min=1e-12)
     normed = history_matrix / norms
+    cs_matrix = torch.mm(normed, normed.t())  # (n_clients, n_clients)
     
-    # Cosine similarity matrix: (n_clients, n_clients)
-    cs_matrix = torch.mm(normed, normed.t())  # O(n^2) pairwise
-    
-    # --- Step 5: FoolsGold Scoring ---
-    # For each client i, find max similarity to any OTHER client j
-    # Set diagonal to -inf so self-similarity is ignored
+    # --- Step 5: FoolsGold scoring (paper's algorithm) ---
+    # v_i = max_{j≠i} cos_sim(H_i, H_j)
     cs_matrix.fill_diagonal_(-float('inf'))
-    v, _ = torch.max(cs_matrix, dim=1)  # v_i = max_{j != i} cos_sim(h_i, h_j)
-    
-    # Clamp v to [0, 1] — negative similarities mean very different, no penalty
+    v, _ = torch.max(cs_matrix, dim=1)
     v = torch.clamp(v, min=0.0, max=1.0)
     
-    # Raw penalty: score = 1 - v  (high similarity → low score)
-    scores = 1.0 - v
+    # Raw score: α_i = 1 - v_i (diverse → high, Sybil → low)
+    alpha = 1.0 - v
     
-    # Log-penalty transformation (standard FoolsGold formula)
-    # Amplifies the gap: honest diverse clients keep high scores,
-    # while near-identical Sybils get penalized exponentially.
-    epsilon = 1e-9
-    scores = scores * (torch.log(torch.clamp(scores, min=epsilon) + 1.0) / math.log(2.0))
+    # Logit transform: α = κ · (ln(α / (1-α)) + 0.5), clamped to [0, 1]
+    # This amplifies the gap between diverse and colluding clients.
+    eps = 1e-6
+    alpha_safe = torch.clamp(alpha, min=eps, max=1.0 - eps)
+    logit_val = torch.log(alpha_safe / (1.0 - alpha_safe))  # ln(α/(1-α))
+    alpha = FOOLSGOLD_KAPPA * (logit_val + 0.5)
+    alpha = torch.clamp(alpha, min=0.0, max=1.0)
     
-    # --- Step 6: Normalize to sum to 1 ---
-    total_score = torch.sum(scores)
-    if total_score < epsilon:
-        # All clients look identical — fall back to uniform weights
-        print("    > FoolsGold: All scores ~0. Using uniform weights.")
-        final_weights = torch.ones(n_clients, device=DEVICE) / n_clients
-    else:
-        final_weights = scores / total_score
-    
-    # --- Step 7: Weighted aggregation of CURRENT round state_dicts ---
+    # --- Step 6: Weighted delta aggregation (paper's update rule) ---
+    # w_{t+1} = w_t + (1/n) · Σ α_i · Δ_i
+    # Note: The paper applies α_i as per-client learning rates (NOT normalized
+    # to sum to 1). We divide by n to keep update magnitude comparable to FedAvg.
+    # With all α_i = 1 (honest), this reduces to standard averaging.
     new_global_dict = OrderedDict()
-    for key in template_dict:
-        new_global_dict[key] = torch.zeros_like(template_dict[key], device=DEVICE, dtype=torch.float32)
+    for key in global_model:
+        new_global_dict[key] = global_model[key].to(DEVICE).float().clone()
     
-    for i, weights_dict in enumerate(weight_dicts):
-        w_i = final_weights[i].item()
-        for key in weights_dict:
-            new_global_dict[key] += weights_dict[key].to(DEVICE).float() * w_i
+    for i, delta in enumerate(client_deltas):
+        a_i = alpha[i].item() / n_clients  # Paper's α scaled by 1/n
+        for key in delta:
+            new_global_dict[key] += a_i * delta[key]
     
-    # Cast back to original dtypes
+    # Cast back to original dtypes (e.g., BatchNorm num_batches_tracked → Long)
     for key in template_dict:
         new_global_dict[key] = new_global_dict[key].to(template_dict[key].dtype)
     
-    print(f"    > FoolsGold: Weights = {[f'{w:.4f}' for w in final_weights.cpu().tolist()]}")
+    print(f"    > FoolsGold: α = {[f'{a:.4f}' for a in alpha.cpu().tolist()]}")
+    print(f"    > FoolsGold: Indicator layer = '{indicator_key}'")
     
     return new_global_dict, None
