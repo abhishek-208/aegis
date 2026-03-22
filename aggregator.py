@@ -77,7 +77,7 @@ def fed_avg(updates, **kwargs):
     return avg_weights, None # No stats for FedAvg
 
 
-def aegis(updates, current_round=None):
+def aegis(updates, current_round=None, **kwargs):
     """
     Performs our Byzantine-Resilient Aegis (Aegis).
     Upgraded to handle Sign Flip and Label Flip via Cosine Similarity.
