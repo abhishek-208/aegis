@@ -394,38 +394,65 @@ def fools_gold(updates, global_model=None, **kwargs):
     history_matrix = torch.stack(normalized_histories)  # (n_clients, num_classes * num_features)
     
     # --- Step 4: Pairwise cosine similarity ---
+    # Note: feature selection is a close approximation of the paper's
+    # ST-weighted indicative feature procedure (see paper §4.2).
     norms = torch.norm(history_matrix, dim=1, keepdim=True).clamp(min=1e-12)
     normed = history_matrix / norms
-    cs_matrix = torch.mm(normed, normed.t())  # (n_clients, n_clients)
+    cs_matrix = torch.mm(normed, normed.t())  # (n_clients, n_clients), in [-1, 1]
+    cs_matrix = torch.clamp(cs_matrix, min=0.0, max=1.0)  # Keep only positive similarity
     
-    # --- Step 5: FoolsGold scoring (paper's algorithm) ---
-    # v_i = max_{j≠i} cos_sim(H_i, H_j)
-    cs_matrix.fill_diagonal_(-float('inf'))
-    v, _ = torch.max(cs_matrix, dim=1)
+    # --- Step 5: Pardoning (paper Algorithm 1, lines 8-12) ---
+    # For each pair (i, j): if v_i < v_j, rescale cs[i,j] by v_i/v_j.
+    # This "pardons" a client that is similar to another but less similar overall —
+    # preventing honest clients from being penalized for coincidental resemblance.
+    cs_pardoned = cs_matrix.clone()
+    # v_i = max_{j≠i} cs[i,j] BEFORE pardoning (used only for the pardon ratio)
+    cs_no_diag = cs_matrix.clone()
+    cs_no_diag.fill_diagonal_(0.0)
+    v_pre = cs_no_diag.max(dim=1).values  # (n_clients,)
+    
+    for i in range(n_clients):
+        for j in range(n_clients):
+            if i == j:
+                continue
+            if v_pre[i] < v_pre[j]:
+                # client i is "less guilty" → pardon its similarity to j
+                ratio = (v_pre[i] / (v_pre[j] + 1e-12)).item()
+                cs_pardoned[i, j] = cs_pardoned[i, j] * ratio
+    
+    # --- Step 6: Compute v_i after pardoning ---
+    cs_pardoned.fill_diagonal_(-float('inf'))
+    v, _ = torch.max(cs_pardoned, dim=1)
     v = torch.clamp(v, min=0.0, max=1.0)
     
-    # Raw score: α_i = 1 - v_i (diverse → high, Sybil → low)
+    # Raw score: α_i = 1 - v_i
     alpha = 1.0 - v
     
-    # Logit transform: α = κ · (ln(α / (1-α)) + 0.5), clamped to [0, 1]
-    # This amplifies the gap between diverse and colluding clients.
+    # --- Step 7: Normalize by max score (paper's explicit step before logit) ---
+    alpha_max = alpha.max()
+    if alpha_max > 1e-9:
+        alpha = alpha / alpha_max  # Most honest client gets α = 1.0
+    else:
+        # All clients look identical → no one gets credit
+        print("    > FoolsGold: All scores ~0. Using uniform weights.")
+        alpha = torch.ones(n_clients, device=DEVICE)
+    
+    # --- Step 8: Logit transform with κ (paper's §3.1) ---
+    # α = κ · (ln(α / (1-α)) + 0.5), clamped to [0, 1]
     eps = 1e-6
     alpha_safe = torch.clamp(alpha, min=eps, max=1.0 - eps)
-    logit_val = torch.log(alpha_safe / (1.0 - alpha_safe))  # ln(α/(1-α))
+    logit_val = torch.log(alpha_safe / (1.0 - alpha_safe))
     alpha = FOOLSGOLD_KAPPA * (logit_val + 0.5)
     alpha = torch.clamp(alpha, min=0.0, max=1.0)
     
-    # --- Step 6: Weighted delta aggregation (paper's update rule) ---
-    # w_{t+1} = w_t + (1/n) · Σ α_i · Δ_i
-    # Note: The paper applies α_i as per-client learning rates (NOT normalized
-    # to sum to 1). We divide by n to keep update magnitude comparable to FedAvg.
-    # With all α_i = 1 (honest), this reduces to standard averaging.
+    # --- Step 9: Weighted delta aggregation — paper's exact update rule ---
+    # w_t = w_{t-1} + Σ_i α_i · Δ_i   (NO 1/n factor — α values control magnitude)
     new_global_dict = OrderedDict()
     for key in global_model:
         new_global_dict[key] = global_model[key].to(DEVICE).float().clone()
     
     for i, delta in enumerate(client_deltas):
-        a_i = alpha[i].item() / n_clients  # Paper's α scaled by 1/n
+        a_i = alpha[i].item()
         for key in delta:
             new_global_dict[key] += a_i * delta[key]
     
@@ -436,4 +463,4 @@ def fools_gold(updates, global_model=None, **kwargs):
     print(f"    > FoolsGold: α = {[f'{a:.4f}' for a in alpha.cpu().tolist()]}")
     print(f"    > FoolsGold: Indicator layer = '{indicator_key}'")
     
-    return new_global_dict, None
+    return new_global_dict, None

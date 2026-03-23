@@ -40,7 +40,7 @@ def _add_attack_shading(ax, all_results, config_module):
         )
         handles, labels = ax.get_legend_handles_labels()
         handles.append(shading_patch)
-        ax.legend(handles=handles, loc='lower right', fontsize=10)
+        ax.legend(handles=handles, loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
         break  # Only shade once (all experiments share the same attack pattern)
 
 def _add_participant_bars(ax, all_results):
@@ -95,8 +95,7 @@ def plot_results(all_results, config_module):
         config_module.EVALUATE_EVERY_N_ROUNDS
     )
     
-    # parameter text box (used on both plots) ---
-    # Batch Size, Byzantine %, Removed Data Split ---
+    # Parameter text box formatted in rows for the bottom-left
     param_text = (
         f"--- Parameters ---\n"
         f"Total Rounds: {config_module.NUM_ROUNDS}\n"
@@ -109,15 +108,17 @@ def plot_results(all_results, config_module):
     )
     props = dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.5)
 
+    # Subtitle line with key dataset info
+    param_subtitle = (
+        f"{config.DATASET_NAME} - {config.DATA_SPLIT_TYPE}"
+    )
+
     # --- === 1. ACCURACY PLOT === ---
     
-    fig_acc, ax_acc = plt.subplots(figsize=(12, 8)) # Single plot
+    fig_acc, ax_acc = plt.subplots(figsize=(14, 8)) # Wider for external legend
     
-    plot_title_acc = (
-        f"Byzantine-Resilient FL Comparison (Accuracy over Time)\n"
-        f"({config.DATASET_NAME} - {config.DATA_SPLIT_TYPE})"
-    )
-    ax_acc.set_title(plot_title_acc, fontsize=16, pad=20)
+    ax_acc.set_title('Byzantine-Resilient FL Comparison (Accuracy over Time)', fontsize=16, pad=20)
+    ax_acc.text(0.5, 1.01, param_subtitle, transform=ax_acc.transAxes, fontsize=9, ha='center', va='bottom', color='gray')
     
     ax_acc.set_ylabel('Global Model Accuracy (%)', fontsize=12)
     ax_acc.set_xlabel('Communication Round', fontsize=12)
@@ -145,7 +146,7 @@ def plot_results(all_results, config_module):
             linewidth=2.5,
         )
     
-    ax_acc.legend(loc='lower right', fontsize=10)
+    ax_acc.legend(loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
     _add_attack_shading(ax_acc, all_results, config_module)
     _add_participant_bars(ax_acc, all_results)
     
@@ -185,26 +186,24 @@ def plot_results(all_results, config_module):
         k_line_proxy = plt.Line2D([0], [0], color='black', linewidth=1.0, label='Adaptive Threshold (k)')
         handles, labels = ax_acc.get_legend_handles_labels()
         handles.append(k_line_proxy)
-        ax_acc.legend(handles=handles, loc='lower right', fontsize=10)
+        ax_acc.legend(handles=handles, loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
 
 
     ax_acc.text(
-        0.02, 0.98, param_text, 
+        0.0, -0.12, param_text, 
         transform=ax_acc.transAxes, 
         fontsize=9,
         verticalalignment='top', 
+        horizontalalignment='left',
         bbox=props
     )
     
     # --- === 2. LOSS PLOT === ---
     
-    fig_loss, ax_loss = plt.subplots(figsize=(12, 8)) # Single plot
+    fig_loss, ax_loss = plt.subplots(figsize=(14, 8)) # Wider for external legend
     
-    plot_title_loss = (
-        f"Byzantine-Resilient FL Comparison (Loss over Time)\n"
-        f"({config.DATASET_NAME} - {config.DATA_SPLIT_TYPE})"
-    )
-    ax_loss.set_title(plot_title_loss, fontsize=16, pad=20)
+    ax_loss.set_title('Byzantine-Resilient FL Comparison (Loss over Time)', fontsize=16, pad=20)
+    ax_loss.text(0.5, 1.01, param_subtitle, transform=ax_loss.transAxes, fontsize=9, ha='center', va='bottom', color='gray')
 
     ax_loss.set_ylabel('Global Model Loss', fontsize=12)
     ax_loss.set_xlabel('Communication Round', fontsize=12)
@@ -232,14 +231,15 @@ def plot_results(all_results, config_module):
             linewidth=2.5,
         )
     
-    ax_loss.legend(loc='upper right', fontsize=10)
+    ax_loss.legend(loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
     _add_attack_shading(ax_loss, all_results, config_module)
     _add_participant_bars(ax_loss, all_results)
     ax_loss.text(
-        0.02, 0.98, param_text, 
+        0.0, -0.12, param_text, 
         transform=ax_loss.transAxes, 
         fontsize=9,
         verticalalignment='top', 
+        horizontalalignment='left',
         bbox=props
     )
 
@@ -252,9 +252,11 @@ def plot_results(all_results, config_module):
     save_path_loss = os.path.join(config_module.RESULTS_DIR, f"{base_filename}_loss_line.png")
     
     fig_acc.tight_layout(pad=3.0)
+    fig_acc.subplots_adjust(bottom=0.25, top=0.90) # Room for legend/params below
     fig_acc.savefig(save_path_acc, dpi=300)
     
     fig_loss.tight_layout(pad=3.0)
+    fig_loss.subplots_adjust(bottom=0.25, top=0.90) # Room for legend/params below
     fig_loss.savefig(save_path_loss, dpi=300)
     
     print(f"  > Line plot (Accuracy) saved to {save_path_acc}")
@@ -284,7 +286,7 @@ def plot_final_summary_bars(all_results, config_module):
     fig_acc, ax_acc = plt.subplots(figsize=(12, 8))
     
     x_ticks = np.arange(len(labels))
-    ax_acc.bar(x_ticks, final_accuracies, color=colors)
+    ax_acc.bar(x_ticks, final_accuracies, color=colors, width=0.4)
     ax_acc.set_xticks(x_ticks)
     
     plot_title_bar_acc = (
@@ -304,7 +306,7 @@ def plot_final_summary_bars(all_results, config_module):
     # --- === 2. FINAL LOSS BAR CHART === ---
     fig_loss, ax_loss = plt.subplots(figsize=(12, 8))
     
-    ax_loss.bar(x_ticks, final_losses, color=colors)
+    ax_loss.bar(x_ticks, final_losses, color=colors, width=0.4)
     ax_loss.set_xticks(x_ticks)
     
     plot_title_bar_loss = (
@@ -316,10 +318,18 @@ def plot_final_summary_bars(all_results, config_module):
     ax_loss.set_ylabel('Final Loss (Log Scale)', fontsize=12)
     ax_loss.set_yscale('log') # Use a log scale for loss
     
+    # With log scale, we need a proper bottom and top so bars don't "drop through the floor"
+    min_loss = min(final_losses)
+    max_loss = max(final_losses)
+    
+    # Bottom should be slightly below the minimum loss, top slightly above max
+    ax_loss.set_ylim(bottom=min_loss * 0.8, top=max_loss * 1.5)
+    
     ax_loss.set_xticklabels(labels, rotation=15, ha='right', fontsize=10)
     
     for i, loss in enumerate(final_losses):
-        ax_loss.text(i, loss * 1.1, f"{loss:.4f}", ha='center', fontweight='bold')
+        # Place text inside the bar, near the top
+        ax_loss.text(i, loss * 0.85, f"{loss:.4f}", ha='center', va='top', fontweight='bold')
 
     # --- === 3. SAVE AND SHOW === ---
     os.makedirs(config_module.RESULTS_DIR, exist_ok=True)
