@@ -6,7 +6,8 @@ Contains:
 2. `aegis(updates)`: Our Byzantine-resilient method (Aegis).
 3. `cw_med(updates)`: Coordinate-wise Median (Corrected version).
 4. `multi_krum(updates, ...)`: Multi-Krum (Corrected version).
-5. `fools_gold(updates, global_model)`: FoolsGold (Non-IID baseline).
+5. `bulyan(updates, fraction_byzantine)`: Bulyan (El Mhamdi et al., 2018).
+6. `fools_gold(updates, global_model)`: FoolsGold (Non-IID baseline).
 """
 
 import torch
@@ -308,6 +309,129 @@ def multi_krum(updates, fraction_byzantine, m_selected=None, weighted=False):
     return new_global_model_dict, None
 
 
+# --- === BULYAN AGGREGATOR === ---
+
+def bulyan(updates, fraction_byzantine, **kwargs):
+    """
+    Bulyan aggregation — El Mhamdi et al., 2018.
+    "The Hidden Vulnerability of Distributed Learning in Byzantium"
+
+    Algorithm:
+      Phase 1 — Iterative Krum:
+        Repeat θ = n - 2f times:
+          1. Compute pairwise squared Euclidean distances among remaining candidates.
+          2. Score each candidate by summing its (n_remaining - f - 2) smallest distances.
+          3. Select the candidate with the lowest score → add to selection_set.
+          4. Remove it from the candidate pool.
+
+      Phase 2 — Coordinate-wise Trimmed Mean:
+        Stack the θ selected gradients.
+        For each coordinate d:
+          1. Compute the median across the θ clients.
+          2. Find the β = θ - 2f clients closest to the median.
+          3. Average those β values → final model coordinate.
+
+    Constraint: n >= 4f + 3
+
+    Args:
+        updates: list of (client_id, weights_dict, num_samples).
+        fraction_byzantine: float in [0, 1), fraction of clients assumed Byzantine.
+
+    Returns:
+        (new_global_model_dict, None)
+    """
+    print("    > Aggregator: Bulyan...")
+
+    if not updates:
+        return OrderedDict(), None
+
+    n = len(updates)
+    f = int(math.floor(n * fraction_byzantine))
+
+    assert n >= 4 * f + 3, (
+        f"Bulyan requires n >= 4f + 3, but got n={n}, f={f} (need n >= {4*f+3})."
+    )
+
+    # θ: number of Krum selections (iterations of Phase 1)
+    theta = n - 2 * f
+    # β: number of clients retained per coordinate in trimmed mean (Phase 2)
+    beta = theta - 2 * f
+
+    print(f"    > Bulyan: n={n}, f={f}, θ={theta} (Krum selections), β={beta} (trimmed mean size)")
+
+    template_dict = updates[0][1]
+
+    # --- Build flat weight matrix: shape (n, dim) ---
+    all_flat = []
+    for _, weights_dict, _ in updates:
+        all_flat.append(_flatten_weights(weights_dict))
+    weights_matrix = torch.stack(all_flat)  # (n, dim)
+
+    # ---------------------------------------------------------------
+    # PHASE 1: Iterative Krum — select θ candidates
+    # ---------------------------------------------------------------
+    # We maintain indices into the ORIGINAL weights_matrix.
+    remaining_indices = list(range(n))   # pool of candidate original indices
+    selection_set = []                   # list of 1D tensors (selected gradients)
+
+    for iteration in range(theta):
+        n_remaining = len(remaining_indices)
+        # Number of nearest neighbours to sum per client in this pool
+        # Paper: n - f - 2, but here the pool shrinks; we use pool_size - f - 2
+        r = max(1, n_remaining - f - 2)
+
+        # Build sub-matrix from the current pool
+        pool_matrix = weights_matrix[remaining_indices]  # (n_remaining, dim)
+
+        # Pairwise squared Euclidean distances (n_remaining × n_remaining)
+        dists = torch.cdist(pool_matrix, pool_matrix, p=2.0) ** 2
+        dists.fill_diagonal_(float('inf'))
+
+        # Score = sum of r nearest neighbours' distances
+        sorted_dists, _ = torch.sort(dists, dim=1)   # ascending
+        scores = sorted_dists[:, :r].sum(dim=1)       # (n_remaining,)
+
+        # Pick the local index with the lowest score
+        local_best = torch.argmin(scores).item()
+
+        # Map back to original index and record
+        original_best = remaining_indices[local_best]
+        selection_set.append(weights_matrix[original_best])          # 1D tensor
+        remaining_indices.pop(local_best)
+
+    # ---------------------------------------------------------------
+    # PHASE 2: Coordinate-wise Trimmed Mean over the θ selected gradients
+    # ---------------------------------------------------------------
+    # Stack: shape (θ, dim)
+    selected_matrix = torch.stack(selection_set)  # (theta, dim)
+
+    # 1. Coordinate-wise median across the θ selected clients: shape (dim,)
+    coord_median = torch.median(selected_matrix, dim=0).values  # (dim,)
+
+    # 2. Absolute distance of each client from the median: shape (θ, dim)
+    abs_deviations = torch.abs(selected_matrix - coord_median.unsqueeze(0))  # (theta, dim)
+
+    # 3. For each coordinate, find the β clients closest to the median.
+    #    Sort deviation along the client dimension (dim=0), take indices of β smallest.
+    #    sorted_idx shape: (theta, dim) — each column gives the rank of clients for that coordinate.
+    _, sorted_idx = torch.sort(abs_deviations, dim=0)  # ascending along client axis
+    beta_idx = sorted_idx[:beta, :]  # (beta, dim) — top-β closest per coordinate
+
+    # 4. Gather the actual values for those β clients per coordinate.
+    #    For coordinate d: select selected_matrix[beta_idx[:, d], d]
+    #    Fully vectorized via advanced indexing — no loop over parameters.
+    beta_values = selected_matrix[beta_idx, torch.arange(selected_matrix.shape[1], device=selected_matrix.device)]
+    # beta_values shape: (beta, dim)
+
+    # 5. Mean of the β selected values per coordinate
+    new_flat = beta_values.mean(dim=0)  # (dim,)
+
+    new_global_model_dict = _unflatten_weights(new_flat, template_dict)
+
+    print(f"    > Bulyan: Done. Selected {theta} via Krum, trimmed to β={beta} per coordinate.")
+    return new_global_model_dict, None
+
+
 # --- === FOOLSGOLD AGGREGATOR === ---
 
 def fools_gold(updates, global_model=None, **kwargs):
@@ -463,4 +587,4 @@ def fools_gold(updates, global_model=None, **kwargs):
     print(f"    > FoolsGold: α = {[f'{a:.4f}' for a in alpha.cpu().tolist()]}")
     print(f"    > FoolsGold: Indicator layer = '{indicator_key}'")
     
-    return new_global_dict, None
+    return new_global_dict, None

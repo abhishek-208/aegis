@@ -20,7 +20,7 @@ from model import get_model
 from data_utils import load_data, partition_data, get_test_dataloader
 from client import Client
 from server import Server
-from aggregator import fed_avg, aegis, multi_krum, cw_med, fools_gold, reset_foolsgold_history
+from aggregator import fed_avg, aegis, multi_krum, cw_med, fools_gold, bulyan, reset_foolsgold_history
 import plotter
 
 # --- === 1. DEFINE EXPERIMENTS === ---
@@ -91,7 +91,23 @@ EXPERIMENT_CONFIGS = [
         'fraction_byzantine': config.FRACTION_BYZANTINE,
         'color': '#e67e22',   # Orange
         'marker': '^'         # Triangle up
-    }      
+    },
+    {
+        # NOTE: Bulyan requires n >= 4f + 3.
+        # With fraction_byzantine=0.2 and ~15 clients/round: f=3, need n>=15. OK.
+        # If you use config.FRACTION_BYZANTINE=0.33 with small rounds it will ASSERT-fail.
+        # Override fraction_byzantine here (and below) independently of config.py.
+        'run': False,  # <-- Set to True to run Bulyan
+        'label': f"Bulyan (With {config.ATTACK_TYPE} Attack)",
+        'aggregator': functools.partial(
+            bulyan,
+            fraction_byzantine=0.2,   # Must satisfy: n_selected >= 4*floor(n*0.2) + 3
+        ),
+        'attack_type': config.ATTACK_TYPE,
+        'fraction_byzantine': 0.2,    # Must match the value above (server creates this many attackers)
+        'color': '#00bcd4',   # Cyan
+        'marker': 'v'         # Triangle down
+    }
 ]
 
 # --- === OVERRIDE FOR Self COMPARISON MODE === ---
