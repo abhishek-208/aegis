@@ -7,7 +7,7 @@ import torch
 import os 
 
 # --- === Simulation Parameters === ---
-NUM_ROUNDS = 5          # Total number of federated learning rounds
+NUM_ROUNDS = 5         # Total number of federated learning rounds
 NUM_CLIENTS = 30          # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 10   # Minimum clients to select each round
 MAX_CLIENTS_PER_ROUND = 20  # Maximum clients to select each round

@@ -569,14 +569,18 @@ def fools_gold(updates, global_model=None, **kwargs):
     alpha = FOOLSGOLD_KAPPA * (logit_val + 0.5)
     alpha = torch.clamp(alpha, min=0.0, max=1.0)
     
-    # --- Step 9: Weighted delta aggregation — paper's exact update rule ---
-    # w_t = w_{t-1} + Σ_i α_i · Δ_i   (NO 1/n factor — α values control magnitude)
+    # --- Step 9: Weighted delta aggregation ---
+    # Paper's rule: w_t = w_{t-1} + Σ_i α_i · Δ_i
+    # In our pseudo-gradient FL framework, Δ_i = w_i - w_global already contains
+    # accumulated local SGD steps (not raw per-sample gradients). Without 1/n the
+    # update is n× too large and explodes. Dividing by n_clients is the correct
+    # translation: when all α_i = 1 (all honest) this equals FedAvg exactly.
     new_global_dict = OrderedDict()
     for key in global_model:
         new_global_dict[key] = global_model[key].to(DEVICE).float().clone()
     
     for i, delta in enumerate(client_deltas):
-        a_i = alpha[i].item()
+        a_i = alpha[i].item() / n_clients  # 1/n scaling required in pseudo-gradient FL
         for key in delta:
             new_global_dict[key] += a_i * delta[key]
     
