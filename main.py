@@ -457,6 +457,17 @@ def run_simulation(exp_config):
     print(f"\n\n------------------------------- Starting Experiment: {exp_config['label']} -------------------------------")
     exp_start_time = time.time()
     
+    # --- Fix Random Seed for Reproducibility ---
+    # Ensures every experiment comparing the same data split gets EXACTLY the same client shards and Byzantines
+    import numpy as np
+    import random
+    seed = getattr(config, 'RANDOM_SEED', 42)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    
     # Reset FoolsGold state to prevent cross-experiment contamination
     reset_foolsgold_history()
     

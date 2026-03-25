@@ -88,7 +88,7 @@ class CNN(nn.Module):
 # --- === 3. Improved CNN (for CIFAR-10) === ---
 class ImprovedCNN(nn.Module):
     """
-    An improved CNN for CIFAR-10 with BatchNorm and Dropout.
+    An improved CNN for CIFAR-10 with GroupNorm and Dropout.
     ~290K parameters — roughly 5x larger than LeNet-5 but still lightweight.
     
     Architecture: Two double-conv blocks with BatchNorm, followed by
@@ -101,16 +101,16 @@ class ImprovedCNN(nn.Module):
         
         # --- Block 1: 3 → 32 channels ---
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)    # (B, 32, 32, 32)
-        self.bn1 = nn.GroupNorm(2, 32)
+        self.gn1 = nn.GroupNorm(2, 32)
         self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)   # (B, 32, 32, 32)
-        self.bn2 = nn.GroupNorm(2, 32)
+        self.gn2 = nn.GroupNorm(2, 32)
         self.pool1 = nn.MaxPool2d(2, 2)                            # (B, 32, 16, 16)
         
         # --- Block 2: 32 → 64 channels ---
         self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)   # (B, 64, 16, 16)
-        self.bn3 = nn.GroupNorm(2, 64)
+        self.gn3 = nn.GroupNorm(2, 64)
         self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)   # (B, 64, 16, 16)
-        self.bn4 = nn.GroupNorm(2, 64)
+        self.gn4 = nn.GroupNorm(2, 64)
         self.pool2 = nn.MaxPool2d(2, 2)                            # (B, 64, 8, 8)
         
         # --- Classifier ---
@@ -121,12 +121,12 @@ class ImprovedCNN(nn.Module):
     
     def forward(self, x):
         # Block 1
-        x = F.relu(self.bn1(self.conv1(x)))    # (B, 32, 32, 32)
-        x = self.pool1(F.relu(self.bn2(self.conv2(x))))  # (B, 32, 16, 16)
+        x = F.relu(self.gn1(self.conv1(x)))    # (B, 32, 32, 32)
+        x = self.pool1(F.relu(self.gn2(self.conv2(x))))  # (B, 32, 16, 16)
         
         # Block 2
-        x = F.relu(self.bn3(self.conv3(x)))    # (B, 64, 16, 16)
-        x = self.pool2(F.relu(self.bn4(self.conv4(x))))  # (B, 64, 8, 8)
+        x = F.relu(self.gn3(self.conv3(x)))    # (B, 64, 16, 16)
+        x = self.pool2(F.relu(self.gn4(self.conv4(x))))  # (B, 64, 8, 8)
         
         # Classifier
         x = x.view(-1, 64 * 8 * 8)            # (B, 4096)
