@@ -7,16 +7,20 @@ import torch
 import os 
 
 # --- === Simulation Parameters === ---
-NUM_ROUNDS = 5         # Total number of federated learning rounds
+NUM_ROUNDS = 1000        # Total number of federated learning rounds
 NUM_CLIENTS = 30          # Total number of clients in the pool
-MIN_CLIENTS_PER_ROUND = 10   # Minimum clients to select each round
-MAX_CLIENTS_PER_ROUND = 20  # Maximum clients to select each round
-FRACTION_BYZANTINE = 0.33
+MIN_CLIENTS_PER_ROUND = 15   # Minimum clients to select each round
+MAX_CLIENTS_PER_ROUND = 25  # Maximum clients to select each round
+FRACTION_BYZANTINE = 0.40
 
 # --- === Experiment Mode === ---
+# Only ONE of the following should be set to True (or both False for standard manual experiments).
+
 # Set to True to run the "Aegis vs Self" comparison across data splits/attacks.
-# Set to False to run the standard manual experiments list in main.py.
 COMPARE_AEGIS_SCENARIOS = False
+
+# Set to True to run the Aegis Ablation Study across different components.
+RUN_ABLATION_STUDY = True
 
 # --- === Model & Data Parameters === ---
 MODEL_TYPE = 'ImprovedCNN'  # 'MLP' for MNIST, 'CNN' (LeNet-5) or 'ImprovedCNN' (BatchNorm+Dropout) for CIFAR10
@@ -25,7 +29,7 @@ DATASET_NAME = 'CIFAR10'
 DATA_SPLIT_TYPE = 'NON_IID'
 
 # For NON_IID: Number of classes/shards per client
-SHARDS_PER_CLIENT = 5
+SHARDS_PER_CLIENT = 4 
 DIRICHLET_ALPHA = 0.5
 BATCH_SIZE = 256           
 
@@ -77,10 +81,22 @@ FOOLSGOLD_KAPPA = 1.0
 # Since inputs are normalized (~0-1 range), a shift of 2.0 is MASSIVE.
 ATTACK_NOISE_STD = 2.0  
 
+# --- === ALIE Attack Parameters === ---
+# "A Little Is Enough" (Baruch et al., NeurIPS 2019)
+# z controls how many standard deviations below the mean the attack targets.
+# Higher z = more aggressive but easier to detect.
+# Lower z = more stealthy but less impactful per round.
+ALIE_Z = 1.0                # Fixed z override. Set to None to use the paper's formula.
+ALIE_USE_OMNISCIENT = False  # True = use all clients' grads for stats (strongest attack).
+                             # False = use only Byzantine clients' grads (realistic).
+
 # ATTACK_TYPE:
-# Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam'
-ATTACK_TYPE = 'sign_flip' 
-ATTACK_PROBABILITY = 0.7    # Probability that a traitor attacks in a given round
+# Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam', 'sybil', 'catastrophic_noise', 'informed_orthogonal'
+ATTACK_TYPE = 'sybil' 
+ATTACK_PROBABILITY = 0.9    # Probability that a traitor attacks in a given round
+
+# NUM_SYBILS_PER_ATTACKER: How many fake identities each attacker creates during a Sybil attack.
+NUM_SYBILS_PER_ATTACKER = 3
 
 # --- === Attack Timeline Parameters === ---
 # Random Window Logic:
@@ -94,15 +110,16 @@ ATTACK_DEADLINE_PERCENT = 0.50     # Attacks must START within this % of converg
 ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)
 
 # --- === Performance Optimizations === ---
-EVALUATE_EVERY_N_ROUNDS = 2
+EVALUATE_EVERY_N_ROUNDS = 1
 
 # --- MULTIPROCESSING CONTROL (Decoupled) ---
 
 # 1. MAX_PARALLEL_CLIENTS:
 # How many clients train simultaneously. 
 #.
-# If None, it uses all available cores.
-MAX_PARALLEL_CLIENTS = 12
+# If None, it uses all available cores. 
+#MAX_PARALLEL_CLIENTS = 12  #For local machine
+MAX_PARALLEL_CLIENTS = 1   #for running on Modal and using only GPU
 
 # 2. DATALOADER_WORKERS:
 # How many subprocesses each DataLoader uses to load data.
@@ -121,7 +138,8 @@ PATIENCE = 40           # Number of rounds to wait for improvement
 MIN_DELTA = 0.001       # Minimum change in loss to qualify as improvement
 
 # --- === Results Directory === ---
-RESULTS_DIR = r'D:\IITD\MTP 2\Results'
+#RESULTS_DIR = r'D:\IITD\MTP 2\Results' # For running on local machine
+RESULTS_DIR = './saved_models' #For running on Modal
 
 # --- === Auto Shutdown Feature === ---
 # If True, the computer will automatically shut down after the entire script finishes.

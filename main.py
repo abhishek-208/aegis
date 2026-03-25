@@ -50,7 +50,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'x'
     },
     {
-        'run': False,  # <-- Set to False to skip the sign_flip test
+        'run': True,  # <-- Set to False to skip the sign_flip test
         'label': f"Aegis (With {config.ATTACK_TYPE} Attack)",
         'aggregator': aegis,
         'attack_type': config.ATTACK_TYPE,
@@ -117,7 +117,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
     # --- Master Toggles: Switch entire data-split groups ON/OFF ---
     RUN_BALANCED_IID   = False
     RUN_UNBALANCED_IID = False
-    RUN_NON_IID        = False
+    RUN_NON_IID        = True
 
     EXPERIMENT_CONFIGS = []
 
@@ -178,6 +178,33 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#1abc9c'
             },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Catastrophic Noise)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'catastrophic_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#e056fd'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Informed Orthogonal)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'informed_orthogonal',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#686de0'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - ALIE)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'alie',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#c0392b'
+            },
         ]
 
     # ====================== UNBALANCED IID =======================
@@ -236,6 +263,33 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'attack_type': 'volume_spam',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#16a085'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Catastrophic Noise)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'catastrophic_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#be2edd'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Informed Orthogonal)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'informed_orthogonal',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#4834d4'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - ALIE)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'alie',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#c0392b'
             },
         ]
 
@@ -296,7 +350,95 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#1abc9c'
             },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - Catastrophic Noise)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'catastrophic_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#e056fd'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - Informed Orthogonal)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'informed_orthogonal',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#686de0'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Non-IID - ALIE)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'alie',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#c0392b'
+            },
         ]
+
+    # =========================== ABLATION STUDY ===========================
+elif config.RUN_ABLATION_STUDY:
+    print(f"\n>>> [Config Override] Running Aegis Ablation Study Protocol <<<")
+
+    EXPERIMENT_CONFIGS = [
+        {
+            'run': True,
+            'label': f"Full Aegis ({config.ATTACK_TYPE})",
+            'aggregator': aegis,
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': '#2ecc71',
+            'marker': 'o'
+        },
+        {
+            'run': True,
+            'label': f"Aegis [No Volume Clip] ({config.ATTACK_TYPE})",
+            'aggregator': functools.partial(aegis, ablate_volume_clipping=True),
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': '#e74c3c',
+            'marker': 'x'
+        },
+        {
+            'run': True,
+            'label': f"Aegis [No Euclidean Filter] ({config.ATTACK_TYPE})",
+            'aggregator': functools.partial(aegis, ablate_euclidean_filter=True),
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': '#ff1493', # Deep Pink
+            'marker': 'd' # thin diamond
+        },
+        {
+            'run': True,
+            'label': f"Aegis [No Directional Filter] ({config.ATTACK_TYPE})",
+            'aggregator': functools.partial(aegis, ablate_directional=True),
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': '#9b59b6',
+            'marker': 's'
+        },
+        {
+            'run': True,
+            'label': f"Aegis [No Cosine Penalty] ({config.ATTACK_TYPE})",
+            'aggregator': functools.partial(aegis, ablate_cosine_penalty=True),
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': '#e67e22',
+            'marker': '^'
+        },
+        {
+            'run': True,
+            'label': f"Aegis [No Adaptive Thresholding] ({config.ATTACK_TYPE})",
+            'aggregator': functools.partial(aegis, ablate_adaptive=True),
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': '#3498db',
+            'marker': 'v'
+        }
+    ]
 
 # --- === 2. SIMULATION RUNNER === ---
 
@@ -350,6 +492,26 @@ def run_simulation(exp_config):
         aggregator_func=exp_config['aggregator'],
         test_loader=test_loader
     )
+    
+    # --- Sybil Attack: Create Fake Identities ---
+    if exp_config['attack_type'] == 'sybil':
+        num_sybils = getattr(config, 'NUM_SYBILS_PER_ATTACKER', 3)
+        sybil_clients = []
+        for client in all_clients:
+            if client.client_id in server.fixed_byzantine_indices:
+                for i in range(num_sybils):
+                    sybil_id = f"sybil_{client.client_id}_{i}"
+                    sybil_client = Client(sybil_id, client.dataloader)
+                    sybil_clients.append(sybil_client)
+                    
+                    # Register Sybil with server
+                    server.fixed_byzantine_indices.add(sybil_id)
+                    # Inherit attack schedule from the master attacker
+                    start, end = server.byzantine_schedules.get(client.client_id, (0, config.NUM_ROUNDS))
+                    server.byzantine_schedules[sybil_id] = (start, end)
+                    
+        all_clients.extend(sybil_clients)
+        print(f"\n[Sybil Attack] Created {len(sybil_clients)} fake Sybil identities. Total pool now {len(all_clients)}.")
     
     # --- Step 3: Run Training Rounds ---
     accuracy_history = []

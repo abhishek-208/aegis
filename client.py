@@ -6,20 +6,22 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from collections import OrderedDict
+import copy
 
 import config
 from model import get_model
 
 # --- === Byzantine Attack Implementation === ---
 
-def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
+def apply_attack(weights, global_weights, attack_type, scale_factor=1.0, prev_global_weights=None):
     """Corrupts a set of model weights based on the specified attack type."""
-    if attack_type == 'none' or attack_type == 'label_flip':
+    if attack_type == 'none' or attack_type == 'label_flip' or attack_type == 'alie':
         return weights
     
     corrupted_weights = OrderedDict()
     
-    if attack_type == 'sign_flip':
+    if attack_type == 'sign_flip' or attack_type == 'sybil':
+        # Sybil attack applies model poisoning similarly to sign_flip
         for key, tensor in weights.items():
             global_tensor = global_weights[key].to(tensor.device)
             delta = tensor - global_tensor
@@ -27,8 +29,8 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
             corrupted_weights[key] = global_tensor - (scale_factor * delta)
         return corrupted_weights
         
-    elif attack_type == 'additive_noise':
-        # Stealthy Gaussian Noise on Deltas
+    elif attack_type == 'additive_noise' or attack_type == 'catastrophic_noise':
+        # Gaussian Noise on Deltas
         for key, tensor in weights.items():
             global_tensor = global_weights[key].to(tensor.device)
             delta = tensor - global_tensor
@@ -36,13 +38,19 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
             # Generate random gaussian noise
             noise = torch.randn_like(delta)
             
+            # Determine the scaling factor
+            if attack_type == 'catastrophic_noise':
+                multiplier = 1000.0  # Massive explosion to stress-test clipping defenses
+            else:
+                multiplier = getattr(config, 'ATTACK_NOISE_STD', 2.0)  # Stealth mode
+            
             # Scale the noise to be a multiple of the honest delta's norm to stay somewhat stealthy
             delta_norm = torch.norm(delta)
             noise_norm = torch.norm(noise)
             
             # Fallback to avoid division by zero if noise matrix is completely zero
             if noise_norm > 1e-9:
-                 scaled_noise = noise * (delta_norm / noise_norm) * config.ATTACK_NOISE_STD
+                 scaled_noise = noise * (delta_norm / noise_norm) * multiplier
             else:
                  scaled_noise = noise
                  
@@ -50,47 +58,53 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
             
         return corrupted_weights
         
-    elif attack_type == 'orthogonal':
+    elif attack_type == 'orthogonal' or attack_type == 'informed_orthogonal':
         # Delta-Aware Orthogonal Noise Attack
-        # The goal is to add severe noise to the update, but ensure the noise is perfectly orthogonal (dot product = 0)
-        # to the honest update. This bypasses structural defenses (like Cosine Similarity) that measure update angles.
+        # 'orthogonal': orthogonalizes against the client's own honest gradient (naive)
+        # 'informed_orthogonal': orthogonalizes against the server's previous global delta (omniscient)
         for key, tensor in weights.items():
             global_tensor = global_weights[key].to(tensor.device)   
             
             # Step 1: Calculate the honest update (delta) that standard local training produced
-            delta = tensor - global_tensor
+            honest_delta = tensor - global_tensor
             
-            # Step 2: Generate entirely random Gaussian noise
-            noise = torch.randn_like(delta)
-            
-            # Step 3: Perform Gram-Schmidt Orthogonalization against the DELTA
-            # We want to subtract the component of 'noise' that points in the direction of 'delta'.
-            # Formula: v_orthogonal = noise - projection_of_noise_onto_delta
-            # Projection formula = ((noise dot delta) / (delta dot delta)) * delta
-            dot = torch.sum(noise * delta)
-            norm_sq = torch.sum(delta * delta)
-            
-            # Fallback to avoid division by zero if delta happens to be a perfectly zero matrix
-            if norm_sq > 1e-9:
-                proj = (dot / norm_sq) * delta
+            # Step 2: Determine which delta to orthogonalize against
+            if attack_type == 'informed_orthogonal' and prev_global_weights is not None:
+                prev_global_tensor = prev_global_weights[key].to(tensor.device)
+                # The server's step direction from the previous round
+                target_delta = global_tensor - prev_global_tensor
+                # If target_delta is zero (e.g. Round 1), fall back to honest_delta
+                if torch.norm(target_delta) < 1e-9:
+                    target_delta = honest_delta
             else:
-                proj = torch.zeros_like(delta)
+                target_delta = honest_delta
                 
-            # 'orth_noise' is now mathematically guaranteed to be orthogonal to 'delta'
+            # Step 3: Generate entirely random Gaussian noise
+            noise = torch.randn_like(honest_delta)
+            
+            # Step 4: Perform Gram-Schmidt Orthogonalization against the TARGET DELTA
+            # We want to subtract the component of 'noise' that points in the direction of 'target_delta'.
+            dot = torch.sum(noise * target_delta)
+            norm_sq = torch.sum(target_delta * target_delta)
+            
+            if norm_sq > 1e-9:
+                proj = (dot / norm_sq) * target_delta
+            else:
+                proj = torch.zeros_like(target_delta)
+                
+            # 'orth_noise' is now mathematically guaranteed to be orthogonal to 'target_delta'
             orth_noise = noise - proj
             
-            # Step 4: Scale the orthogonal noise to match the honest delta's magnitude
-            # This makes the attack stealthy against magnitude/variance filters (like Median Absolute Deviation)
-            # because the total norm of the malicious update stays within expected statistical bounds.
-            delta_norm = torch.norm(delta)
+            # Step 5: Scale the orthogonal noise to match the honest delta's magnitude
+            # This makes the attack stealthy against magnitude/variance filters.
+            delta_norm = torch.norm(honest_delta)
             orth_norm = torch.norm(orth_noise)
             
             if orth_norm > 1e-9:
                 orth_noise = orth_noise * (delta_norm / orth_norm)
 
-            # Step 5: Construct the final Corrupted Weights
+            # Step 6: Construct the final Corrupted Weights
             # W_corrupted = W_global + honest_delta + orthogonal_noise
-            # Since our input 'tensor' already equals (W_global + honest_delta), we just add orth_noise.
             corrupted_weights[key] = tensor + orth_noise
             
         return corrupted_weights
@@ -112,6 +126,7 @@ class Client:
         self.client_id = client_id
         self.dataloader = dataloader
         self.device = config.DEVICE
+        self.prev_global_model_state_dict = None
 
     def train(self, global_model_state_dict, is_byzantine=False, attack_type='none', force_device=None, current_lr=None):
         """Performs one round of local training."""
@@ -140,8 +155,8 @@ class Client:
                 data, target = data.to(train_device), target.to(train_device)
                 
                 # --- Label Flipping Logic ---
-                # Used for 'label_flip' AND 'volume_spam' (Volume spam is just label flip + huge count)
-                if is_byzantine and (attack_type == 'label_flip' or attack_type == 'volume_spam'):
+                # Used for 'label_flip' only now. (Volume spam sends honest weights to isolate threshold testing)
+                if is_byzantine and attack_type == 'label_flip':
                     # Shift labels by 1 (target mod 10)
                     target = (target + 1) % 10
                 
@@ -156,7 +171,10 @@ class Client:
         
         # --- Step 3: Apply Attack (if Byzantine) ---
         if is_byzantine:
-            corrupted_weights = apply_attack(local_weights, global_model_state_dict, attack_type)
+            corrupted_weights = apply_attack(local_weights, global_model_state_dict, attack_type, prev_global_weights=self.prev_global_model_state_dict)
+            
+            # Save the current rounded global model so we can use it to guess the median NEXT round
+            self.prev_global_model_state_dict = copy.deepcopy(global_model_state_dict)
             
             # --- Volume Spam Logic ---
             if attack_type == 'volume_spam':
@@ -166,4 +184,6 @@ class Client:
             
             return self.client_id, corrupted_weights, len(self.dataloader.dataset)
         else:
+            # Save the current rounded global model even if honest (just in case they turn Byzantine next round)
+            self.prev_global_model_state_dict = copy.deepcopy(global_model_state_dict)
             return self.client_id, local_weights, len(self.dataloader.dataset)

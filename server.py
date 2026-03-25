@@ -8,6 +8,8 @@ import random
 import math
 import time
 import concurrent.futures
+from collections import OrderedDict
+from scipy.stats import norm as scipy_norm
 
 import config
 from model import get_model
@@ -152,6 +154,104 @@ class Server:
         t_end_train = time.time()
         print(f"    > Training Time: {t_end_train - t_start_train:.2f}s")
         
+        # --- SYBIL ATTACK SYNCHRONIZATION ---
+        # If this is a Sybil attack, all attackers must submit the exact same update.
+        if attack_type == 'sybil' and len(byzantine_client_set) > 0:
+            sybil_base_update = None
+            for update in updates:
+                c_id, w, n_samp = update
+                if c_id in byzantine_client_set:
+                    # Make a deepcopy or just reference the weights
+                    # Since we only read them during aggregation, reference is fine
+                    sybil_base_update = (w, n_samp)
+                    break
+            
+            if sybil_base_update is not None:
+                base_w, base_n = sybil_base_update
+                for i in range(len(updates)):
+                    c_id, _, _ = updates[i]
+                    if c_id in byzantine_client_set:
+                        updates[i] = (c_id, base_w, base_n)
+
+        # --- ALIE ATTACK COORDINATION ---
+        # "A Little Is Enough" (Baruch et al., NeurIPS 2019)
+        # All Byzantines first trained honestly. Now we replace their updates
+        # with a coordinated poisoned gradient crafted from cross-client statistics.
+        if attack_type == 'alie' and len(byzantine_client_set) > 0:
+            
+            n_total = len(updates)
+            m_byz = len(byzantine_client_set)
+            
+            # --- Step A: Collect the gradients (deltas) to compute statistics over ---
+            # Flatten the global model once for delta computation.
+            flat_global = torch.cat([p.flatten() for p in global_weights_cpu.values()])
+            
+            # Decide which clients' gradients to use for μ, σ estimation.
+            if config.ALIE_USE_OMNISCIENT:
+                # Omniscient: use ALL clients' deltas (honest + Byzantine)
+                stat_deltas = []
+                for c_id, w, n_samp in updates:
+                    flat_w = torch.cat([v.flatten() for v in w.values()])
+                    stat_deltas.append(flat_w - flat_global)
+            else:
+                # Colluding: use only Byzantine clients' deltas
+                stat_deltas = []
+                for c_id, w, n_samp in updates:
+                    if c_id in byzantine_client_set:
+                        flat_w = torch.cat([v.flatten() for v in w.values()])
+                        stat_deltas.append(flat_w - flat_global)
+            
+            if len(stat_deltas) >= 2:
+                # Stack into matrix: (num_stat_clients, model_dim)
+                stat_matrix = torch.stack(stat_deltas)
+                
+                # --- Step B: Compute coordinate-wise mean and std ---
+                mu = stat_matrix.mean(dim=0)    # (model_dim,)
+                sigma = stat_matrix.std(dim=0)  # (model_dim,)
+                
+                # --- Step C: Determine z ---
+                if config.ALIE_Z is not None:
+                    # Use the fixed z from config
+                    z = config.ALIE_Z
+                else:
+                    # Paper formula: z = Φ^{-1}((n - 2m) / (n - m))
+                    # This is the maximum z such that the poisoned value still
+                    # looks like it could be an honest gradient to a majority filter.
+                    ratio = (n_total - 2 * m_byz) / max(n_total - m_byz, 1)
+                    ratio = max(0.001, min(ratio, 0.999))  # Clamp for numerical safety
+                    z = scipy_norm.ppf(ratio)
+                    z = max(z, 0.0)  # Floor at 0 — negative z has negligible impact
+                
+                # --- Step D: Craft the poisoned delta ---
+                # g_malicious = μ - z * σ  (pushes every coordinate downward)
+                poisoned_delta = mu - z * sigma
+                
+                # Convert back to weight space: W_malicious = W_global + poisoned_delta
+                poisoned_flat_weights = flat_global + poisoned_delta
+                
+                # Unflatten back into a state_dict using the template structure
+                template_dict = updates[0][1]
+                poisoned_weights = OrderedDict()
+                idx = 0
+                for key, tensor in template_dict.items():
+                    numel = tensor.numel()
+                    poisoned_weights[key] = poisoned_flat_weights[idx:idx + numel].reshape(tensor.shape)
+                    idx += numel
+                
+                # --- Step E: Replace all Byzantine clients' updates ---
+                for i in range(len(updates)):
+                    c_id, w, n_samp = updates[i]
+                    if c_id in byzantine_client_set:
+                        # Keep the honest n_samp (no volume inflation — ALIE is stealth-only)
+                        updates[i] = (c_id, poisoned_weights, n_samp)
+                
+                print(f"    > [ALIE] Crafted poisoned gradient: z={z:.4f}, "
+                      f"using {'ALL' if config.ALIE_USE_OMNISCIENT else 'Byzantine-only'} "
+                      f"gradients ({len(stat_deltas)} clients)")
+            else:
+                print(f"    > [ALIE] Not enough Byzantine clients for stats ({len(stat_deltas)}). "
+                      f"Skipping coordination this round.")
+
         # --- Step 4: Aggregation ---
         t_start_agg = time.time()
         

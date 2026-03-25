@@ -101,16 +101,16 @@ class ImprovedCNN(nn.Module):
         
         # --- Block 1: 3 → 32 channels ---
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)    # (B, 32, 32, 32)
-        self.bn1 = nn.BatchNorm2d(32)
+        self.bn1 = nn.GroupNorm(2, 32)
         self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)   # (B, 32, 32, 32)
-        self.bn2 = nn.BatchNorm2d(32)
+        self.bn2 = nn.GroupNorm(2, 32)
         self.pool1 = nn.MaxPool2d(2, 2)                            # (B, 32, 16, 16)
         
         # --- Block 2: 32 → 64 channels ---
         self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)   # (B, 64, 16, 16)
-        self.bn3 = nn.BatchNorm2d(64)
+        self.bn3 = nn.GroupNorm(2, 64)
         self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)   # (B, 64, 16, 16)
-        self.bn4 = nn.BatchNorm2d(64)
+        self.bn4 = nn.GroupNorm(2, 64)
         self.pool2 = nn.MaxPool2d(2, 2)                            # (B, 64, 8, 8)
         
         # --- Classifier ---

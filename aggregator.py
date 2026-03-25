@@ -79,11 +79,18 @@ def fed_avg(updates, **kwargs):
     return avg_weights, None # No stats for FedAvg
 
 
-def aegis(updates, current_round=None, **kwargs):
+def aegis(updates, current_round=None, 
+          ablate_volume_clipping=False, 
+          ablate_directional=False, 
+          ablate_cosine_penalty=False, 
+          ablate_adaptive=False,
+          ablate_euclidean_filter=False,
+          **kwargs):
     """
     Performs our Byzantine-Resilient Aegis (Aegis).
     Upgraded to handle Sign Flip and Label Flip via Cosine Similarity.
     Uses adaptive thresholding (Strategy A+C) when enabled.
+    Ablation parameters allow disabling specific defenses.
     """
     print("    > Aggregator: Aegis...")
     
@@ -101,10 +108,8 @@ def aegis(updates, current_round=None, **kwargs):
     weights_matrix = torch.stack(all_flat_weights)
     all_data_sizes_tensor = torch.tensor(data_sizes, device=DEVICE, dtype=torch.float32)
 
-    # --- Step 1: Volume Clipping ---
-    # Clip n_k to 2.0 * average_data_size
-    avg_data_size = torch.mean(all_data_sizes_tensor)
-    clipped_data_sizes = torch.clamp(all_data_sizes_tensor, max=2.0 * avg_data_size.item())
+    # --- Step 1: Volume Bounding / Clipping ---
+    # Moved to Step 5 to ensure clipping is robustly calculated over approved clients only.
 
     # --- NEW Step 1.5: Compute Deltas (Updates) ---
     # Aegis works best on gradient updates, not raw weights (especially with DP clipping).
@@ -139,7 +144,7 @@ def aegis(updates, current_round=None, **kwargs):
     distance_mad = torch.median(torch.abs(euclidean_distances - median_distance))    # median absolute deviation
 
     # Compute adaptive k (Strategy A + C) or use fixed value
-    if ADAPTIVE_THRESHOLD_ENABLED and current_round is not None:
+    if ADAPTIVE_THRESHOLD_ENABLED and current_round is not None and not ablate_adaptive:
         # Strategy A: Round-Based Decay — k_phase decays linearly from K_MAX to K_MIN
         progress = min(current_round / WARMUP_ROUNDS, 1.0)
         k_phase = K_MAX - (K_MAX - K_MIN) * progress
@@ -165,8 +170,16 @@ def aegis(updates, current_round=None, **kwargs):
     # Reject if Distance > Threshold OR Cosine Similarity < 0 (Opposite direction)
     # Using indices logic
     
-    pass_euclidean = euclidean_distances <= rejection_cutoff
-    pass_direction = cos_sim >= 0.0 # Reject negative cosine similarity
+    if not ablate_euclidean_filter:
+        pass_euclidean = euclidean_distances <= rejection_cutoff
+    else:
+        pass_euclidean = torch.ones_like(euclidean_distances, dtype=torch.bool)
+    
+    if not ablate_directional:
+        pass_direction = cos_sim >= 0.0 # Reject negative cosine similarity
+    else:
+        # Ignore direction
+        pass_direction = torch.ones_like(cos_sim, dtype=torch.bool)
     
     approved_mask = pass_euclidean & pass_direction
     approved_indices = torch.where(approved_mask)[0]
@@ -178,7 +191,15 @@ def aegis(updates, current_round=None, **kwargs):
     print(f"    > Aegis: Approved {len(approved_indices)}/{len(updates)} clients (Rejected {len(updates) - len(approved_indices)}).")
 
     # --- Step 5: Calculate Enhanced Credit Scores ---
-    approved_clipped_sizes = clipped_data_sizes[approved_indices]
+    approved_data_sizes = all_data_sizes_tensor[approved_indices]
+    
+    if not ablate_volume_clipping:
+        # Robust Volume Clipping: bounding sizes against the MEDIAN of only the approved clients
+        robust_median_size = torch.median(approved_data_sizes)
+        approved_clipped_sizes = torch.clamp(approved_data_sizes, max=2.0 * robust_median_size.item())
+    else:
+        approved_clipped_sizes = approved_data_sizes
+        
     approved_distances = euclidean_distances[approved_indices]
     approved_cosine_penalties = cosine_penalty[approved_indices]
     # NOTE: We still avg the WEIGHTS, not the deltas, to reconstruct the model.
@@ -186,7 +207,11 @@ def aegis(updates, current_round=None, **kwargs):
     approved_weights_matrix = weights_matrix[approved_indices]
 
     # Formula: Score = Clipped_Volume / (Euclidean_Distance + (Cosine_Penalty * 10.0) + Epsilon)
-    denominator = approved_distances + (approved_cosine_penalties * 10.0) + RWA_EPSILON
+    if not ablate_cosine_penalty:
+        denominator = approved_distances + (approved_cosine_penalties * 10.0) + RWA_EPSILON
+    else:
+        denominator = approved_distances + RWA_EPSILON
+        
     raw_scores = approved_clipped_sizes / denominator
     
     total_score = torch.sum(raw_scores)
