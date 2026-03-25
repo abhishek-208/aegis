@@ -88,13 +88,6 @@ def plot_results(all_results, config_module):
     """
     print(f"\n[Plotter] Generating 2 result line plots (Accuracy and Loss)...")
     
-    # Get the x-axis (evaluation rounds)
-    eval_rounds = np.arange(
-        config_module.EVALUATE_EVERY_N_ROUNDS, 
-        config_module.NUM_ROUNDS + 1, 
-        config_module.EVALUATE_EVERY_N_ROUNDS
-    )
-    
     # Parameter text box formatted in rows for the bottom-left
     param_text = (
         f"--- Parameters ---\n"
@@ -263,6 +256,7 @@ def plot_results(all_results, config_module):
     print(f"  > Line plot (Loss) saved to {save_path_loss}")
     
     plt.show() # Show both line plots
+    plt.close('all') # Prevent memory leaks
     
     return save_path_acc, save_path_loss
 
@@ -348,6 +342,7 @@ def plot_final_summary_bars(all_results, config_module):
     print(f"  > Bar chart (Loss) saved to {save_path_loss_bar}")
     
     plt.show() # Show both bar charts
+    plt.close('all') # Prevent memory leaks
     
     return save_path_acc_bar, save_path_loss_bar
 

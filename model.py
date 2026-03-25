@@ -91,7 +91,7 @@ class ImprovedCNN(nn.Module):
     An improved CNN for CIFAR-10 with GroupNorm and Dropout.
     ~290K parameters — roughly 5x larger than LeNet-5 but still lightweight.
     
-    Architecture: Two double-conv blocks with BatchNorm, followed by
+    Architecture: Two double-conv blocks with GroupNorm, followed by
     a fully connected classifier with Dropout for regularization.
     
     Input shape: (Batch_size, 3, 32, 32)

@@ -116,7 +116,14 @@ def aegis(updates, current_round=None,
     # We subtract the template_weights (global model from start of round) from each client's weights.
     
     # 1. Flatten the template/global model
-    flat_global = _flatten_weights(template_dict)
+    # Use the actual global_model passed from the server for the start of the round.
+    global_model_state = kwargs.get('global_model', None)
+    if global_model_state is not None:
+        flat_global = _flatten_weights(global_model_state)
+    else:
+        # Fallback to the first client as a template (structure only, values might be slightly biased)
+        # Note: This fallback should ideally not be hit in the main simulation.
+        flat_global = _flatten_weights(template_dict)
     
     # 2. Compute Deltas: delta_i = w_i - w_global
     # shape: (n_clients, dim)

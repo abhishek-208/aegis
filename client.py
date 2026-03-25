@@ -15,7 +15,11 @@ from model import get_model
 
 def apply_attack(weights, global_weights, attack_type, scale_factor=1.0, prev_global_weights=None):
     """Corrupts a set of model weights based on the specified attack type."""
-    if attack_type == 'none' or attack_type == 'label_flip' or attack_type == 'alie':
+    if attack_type in ['none', 'label_flip', 'alie', 'volume_spam']:
+        # none: honest client
+        # label_flip: only labels are altered during train(), gradients flow normally
+        # alie: orchestrated centrally by the server (uses cross-client stats)
+        # volume_spam: only report size is altered in Client.train(); weights are honest
         return weights
     
     corrupted_weights = OrderedDict()
@@ -110,9 +114,6 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0, prev_gl
         return corrupted_weights
 
     else:
-        # For volume_spam, we don't change weights here (except implicit label_flip in train)
-        if attack_type == 'volume_spam':
-            return weights
         # Only raise error if truly unknown
         # raise ValueError(f"Unknown attack type: {attack_type}")
         return weights

@@ -161,9 +161,9 @@ class Server:
             for update in updates:
                 c_id, w, n_samp = update
                 if c_id in byzantine_client_set:
-                    # Make a deepcopy or just reference the weights
-                    # Since we only read them during aggregation, reference is fine
-                    sybil_base_update = (w, n_samp)
+                    # Use deepcopy to prevent in-place corruption by aggregators
+                    import copy
+                    sybil_base_update = (copy.deepcopy(w), n_samp)
                     break
             
             if sybil_base_update is not None:

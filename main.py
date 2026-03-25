@@ -461,7 +461,7 @@ def run_simulation(exp_config):
     # Ensures every experiment comparing the same data split gets EXACTLY the same client shards and Byzantines
     import numpy as np
     import random
-    seed = getattr(config, 'RANDOM_SEED', 42)
+    seed = config.RANDOM_SEED
     np.random.seed(seed)
     torch.manual_seed(seed)
     random.seed(seed)
@@ -634,10 +634,9 @@ def run_simulation(exp_config):
     return {
         "label": exp_config['label'],
         "color": exp_config['color'],
-        "marker": exp_config['marker'],
+        "marker": exp_config.get('marker', 'o'),
         "history": accuracy_history,
         "loss_history": loss_history,
-        "attack_intensity": attack_intensity_history,
         "attack_intensity": attack_intensity_history,
         "participant_counts": participant_counts,
         "adaptive_k_history": adaptive_k_history,

@@ -11,11 +11,12 @@ NUM_ROUNDS = 1000            # Total number of federated learning rounds
 NUM_CLIENTS = 30             # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 15   # Minimum clients to select each round
 MAX_CLIENTS_PER_ROUND = 25   # Maximum clients to select each round
+RANDOM_SEED = 42             # Fixed seed for reproducibility control
 
 # --- === 2. Experiment Toggles === ---
 # Only ONE of the following should be set to True (or both False for manual experiments).
 COMPARE_AEGIS_SCENARIOS = False    # Set True to run "Aegis vs Baselines" comparison
-RUN_ABLATION_STUDY = False         # Set True to run Aegis Ablation Study across components
+RUN_ABLATION_STUDY = True         # Set True to run Aegis Ablation Study across components
 
 # --- === 3. Data & Model Parameters === ---
 MODEL_TYPE = 'ImprovedCNN'  # 'MLP' (MNIST), 'CNN' (LeNet-5), 'ImprovedCNN' (CIFAR10)
@@ -59,7 +60,7 @@ FOOLSGOLD_KAPPA = 1.0               # Higher bounds -> more aggressive suppressi
 FRACTION_BYZANTINE = 0.40           # Ratio of Byzantine clients in the total pool
 
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam', 'sybil', 'catastrophic_noise', 'informed_orthogonal', 'alie'
-ATTACK_TYPE = 'sybil' 
+ATTACK_TYPE = 'sign_flip' 
 ATTACK_PROBABILITY = 0.9            # Probability of a traitor attacking whilst in their window
 ATTACK_NOISE_STD = 2.0              # Multiplier for additive_noise magnitudes
 NUM_SYBILS_PER_ATTACKER = 3         # Fake identities per traitor during a Sybil attack
@@ -70,7 +71,7 @@ ALIE_USE_OMNISCIENT = False         # True = use all gradients, False = only tra
 
 # Attack Window Timeline
 ATTACK_WINDOW_MIN_DURATION = 10     # Minimum active attack window length
-ATTACK_WINDOW_MAX_DURATION = 100     # Maximum active attack window length
+ATTACK_WINDOW_MAX_DURATION = 200     # Maximum active attack window length
 EXPECTED_CONVERGENCE_ROUNDS = 400   # Used to calculate the deadline
 ATTACK_DEADLINE_PERCENT = 0.50      # Attacks must start prior to this % of convergence
 ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)
@@ -81,7 +82,7 @@ MAX_PARALLEL_CLIENTS = 1            # 1 for Serial/GPU, None for maximum CPU thr
 DATALOADER_WORKERS = 0              # MUST stay 0 if Multiprocessing clients > 0
 
 # --- === 10. Evaluation & Early Stopping === ---
-EVALUATE_EVERY_N_ROUNDS = 1
+EVALUATE_EVERY_N_ROUNDS = 2
 EARLY_STOPPING_ENABLED = True
 PATIENCE = 40                       # Wait time for loss improvement
 MIN_DELTA = 0.001                   # Substantial enough loss drop to reset patience
