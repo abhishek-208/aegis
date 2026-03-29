@@ -655,7 +655,7 @@ def main():
     print(f"Config: {config.NUM_ROUNDS} rounds, {config.NUM_CLIENTS} total clients")
     print(f"Device: {config.DEVICE}")
 
-    # Run all enabled experiments
+    # Run all enabled experiments, saving plots progressively after each one
     all_results = []
     for exp_config in EXPERIMENT_CONFIGS:
         if exp_config.get('run', True):
@@ -663,23 +663,20 @@ def main():
             all_results.append(result)
         else:
             print(f"\n\n------------------------------- Skipping Experiment: {exp_config['label']} -------------------------------")
+            continue
 
-    # --- Step 4: Plot Results ---
+        # --- Save plots after every completed scenario (progressive overwrite) ---
+        # This ensures partial results are never lost if the run is interrupted.
+        print(f"\n[Plotter] Saving progressive plots with {len(all_results)} scenario(s) so far...")
+        plotter.plot_results(all_results, config)
+        plotter.plot_final_summary_bars(all_results, config)
+
+    # --- Final confirmation ---
     if not all_results:
         print("\n\n------------------------------- No experiments were run. Exiting. -------------------------------")
         return
 
-    print("\n\n------------------------------- All simulations complete. Generating plot... -------------------------------")
-    
-    # 1. Generate line plots for training dynamics
-    save_path_acc, save_path_loss = plotter.plot_results(all_results, config)
-    
-    # 2. Generate bar charts for final summary
-    save_path_acc_bar, save_path_loss_bar = plotter.plot_final_summary_bars(all_results, config)
-    
-    print("\n--- Plotting Complete ---")
-    print(f"Line plots saved to: '{save_path_acc}' and '{save_path_loss}'")
-    print(f"Bar charts saved to: '{save_path_acc_bar}' and '{save_path_loss_bar}'")
+    print("\n\n------------------------------- All simulations complete. Final plots saved. -------------------------------")
 
 if __name__ == "__main__":
     # Fix for multiprocessing on Windows/macOS

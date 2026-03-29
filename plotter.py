@@ -108,9 +108,17 @@ def plot_results(all_results, config_module):
 
     # --- === 1. ACCURACY PLOT === ---
     
+    # Determine plot mode label
+    if getattr(config_module, 'RUN_ABLATION_STUDY', False):
+        mode_label = "Aegis Ablation Study"
+    elif getattr(config_module, 'COMPARE_AEGIS_SCENARIOS', False):
+        mode_label = "Aegis Scenario Comparison"
+    else:
+        mode_label = "Byzantine-Resilient FL Comparison"
+
     fig_acc, ax_acc = plt.subplots(figsize=(14, 8)) # Wider for external legend
     
-    ax_acc.set_title('Byzantine-Resilient FL Comparison (Accuracy over Time)', fontsize=16, pad=20)
+    ax_acc.set_title(f'{mode_label} (Accuracy over Time)', fontsize=16, pad=20)
     ax_acc.text(0.5, 1.01, param_subtitle, transform=ax_acc.transAxes, fontsize=9, ha='center', va='bottom', color='gray')
     
     ax_acc.set_ylabel('Global Model Accuracy (%)', fontsize=12)
@@ -195,7 +203,7 @@ def plot_results(all_results, config_module):
     
     fig_loss, ax_loss = plt.subplots(figsize=(14, 8)) # Wider for external legend
     
-    ax_loss.set_title('Byzantine-Resilient FL Comparison (Loss over Time)', fontsize=16, pad=20)
+    ax_loss.set_title(f'{mode_label} (Loss over Time)', fontsize=16, pad=20)
     ax_loss.text(0.5, 1.01, param_subtitle, transform=ax_loss.transAxes, fontsize=9, ha='center', va='bottom', color='gray')
 
     ax_loss.set_ylabel('Global Model Loss', fontsize=12)
@@ -240,7 +248,8 @@ def plot_results(all_results, config_module):
     
     os.makedirs(config_module.RESULTS_DIR, exist_ok=True)
     
-    base_filename = f"{config_module.DATASET_NAME}_{config_module.DATA_SPLIT_TYPE}_R{config_module.NUM_ROUNDS}"
+    mode_suffix = "_ablation" if getattr(config_module, 'RUN_ABLATION_STUDY', False) else ""
+    base_filename = f"{config_module.DATASET_NAME}_{config_module.DATA_SPLIT_TYPE}_R{config_module.NUM_ROUNDS}{mode_suffix}"
     save_path_acc = os.path.join(config_module.RESULTS_DIR, f"{base_filename}_accuracy_line.png")
     save_path_loss = os.path.join(config_module.RESULTS_DIR, f"{base_filename}_loss_line.png")
     
@@ -269,6 +278,14 @@ def plot_final_summary_bars(all_results, config_module):
     """
     print(f"\n[Plotter] Generating 2 final summary bar charts...")
     
+    # Determine plot mode label
+    if getattr(config_module, 'RUN_ABLATION_STUDY', False):
+        mode_label = "Aegis Ablation Study"
+    elif getattr(config_module, 'COMPARE_AEGIS_SCENARIOS', False):
+        mode_label = "Aegis Scenario Comparison"
+    else:
+        mode_label = "Byzantine-Resilient FL Comparison"
+    
     # Extract data for plotting
     labels = [f"{r['label']}\n({r['duration']:.1f}s)" for r in all_results]
     colors = [r['color'] for r in all_results]
@@ -284,7 +301,7 @@ def plot_final_summary_bars(all_results, config_module):
     ax_acc.set_xticks(x_ticks)
     
     plot_title_bar_acc = (
-        f"Final Model Accuracy\n"
+        f"{mode_label} — Final Model Accuracy\n"
         f"({config.DATASET_NAME} - {config.DATA_SPLIT_TYPE}, {config.NUM_ROUNDS} Rounds)"
     )
     ax_acc.set_title(plot_title_bar_acc, fontsize=16, pad=20)
@@ -304,7 +321,7 @@ def plot_final_summary_bars(all_results, config_module):
     ax_loss.set_xticks(x_ticks)
     
     plot_title_bar_loss = (
-        f"Final Model Loss\n"
+        f"{mode_label} — Final Model Loss\n"
         f"({config.DATASET_NAME} - {config.DATA_SPLIT_TYPE}, {config.NUM_ROUNDS} Rounds)"
     )
     ax_loss.set_title(plot_title_bar_loss, fontsize=16, pad=20)
@@ -328,7 +345,8 @@ def plot_final_summary_bars(all_results, config_module):
     # --- === 3. SAVE AND SHOW === ---
     os.makedirs(config_module.RESULTS_DIR, exist_ok=True)
     
-    base_filename = f"{config_module.DATASET_NAME}_{config_module.DATA_SPLIT_TYPE}_R{config_module.NUM_ROUNDS}"
+    mode_suffix = "_ablation" if getattr(config_module, 'RUN_ABLATION_STUDY', False) else ""
+    base_filename = f"{config_module.DATASET_NAME}_{config_module.DATA_SPLIT_TYPE}_R{config_module.NUM_ROUNDS}{mode_suffix}"
     save_path_acc_bar = os.path.join(config_module.RESULTS_DIR, f"{base_filename}_final_accuracy_bar.png")
     save_path_loss_bar = os.path.join(config_module.RESULTS_DIR, f"{base_filename}_final_loss_bar.png")
     

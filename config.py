@@ -61,7 +61,7 @@ FRACTION_BYZANTINE = 0.40           # Ratio of Byzantine clients in the total po
 
 # Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam', 'sybil', 'catastrophic_noise', 'informed_orthogonal', 'alie'
 ATTACK_TYPE = 'sign_flip' 
-ATTACK_PROBABILITY = 0.9            # Probability of a traitor attacking whilst in their window
+ATTACK_PROBABILITY = 1.0            # Probability of a traitor attacking whilst in their window
 ATTACK_NOISE_STD = 2.0              # Multiplier for additive_noise magnitudes
 NUM_SYBILS_PER_ATTACKER = 3         # Fake identities per traitor during a Sybil attack
 
@@ -70,10 +70,15 @@ ALIE_Z = 1.0                        # Set to None for algorithmic paper formula.
 ALIE_USE_OMNISCIENT = False         # True = use all gradients, False = only traitor gradients
 
 # Attack Window Timeline
-ATTACK_WINDOW_MIN_DURATION = 10     # Minimum active attack window length
-ATTACK_WINDOW_MAX_DURATION = 200     # Maximum active attack window length
-EXPECTED_CONVERGENCE_ROUNDS = 400   # Used to calculate the deadline
-ATTACK_DEADLINE_PERCENT = 0.50      # Attacks must start prior to this % of convergence
+# If PERSISTENT_ATTACK_WINDOW = True, ALL traitors attack from round 0 to NUM_ROUNDS.
+# This guarantees identical, full-run attack pressure across ALL ablation experiments.
+# Set to False to use the random Beta-distributed start/end schedule below.
+PERSISTENT_ATTACK_WINDOW = True     # Recommended: True for Ablation, False for standard runs
+
+ATTACK_WINDOW_MIN_DURATION = 10     # Minimum active attack window length (used only if PERSISTENT=False)
+ATTACK_WINDOW_MAX_DURATION = 200    # Maximum active attack window length (used only if PERSISTENT=False)
+EXPECTED_CONVERGENCE_ROUNDS = 400   # Used to calculate the deadline                (used only if PERSISTENT=False)
+ATTACK_DEADLINE_PERCENT = 0.50      # Attacks must start prior to this % of convergence (used only if PERSISTENT=False)
 ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)
 
 # --- === 9. Environment & System Limits === ---
@@ -82,9 +87,9 @@ MAX_PARALLEL_CLIENTS = 1            # 1 for Serial/GPU, None for maximum CPU thr
 DATALOADER_WORKERS = 0              # MUST stay 0 if Multiprocessing clients > 0
 
 # --- === 10. Evaluation & Early Stopping === ---
-EVALUATE_EVERY_N_ROUNDS = 2
+EVALUATE_EVERY_N_ROUNDS = 5
 EARLY_STOPPING_ENABLED = True
-PATIENCE = 40                       # Wait time for loss improvement
+PATIENCE = 20                       # Wait time for loss improvement (20 evals × 5 rounds = 100 real rounds)
 MIN_DELTA = 0.001                   # Substantial enough loss drop to reset patience
 
 # --- === 11. Output, Visualization & System === ---

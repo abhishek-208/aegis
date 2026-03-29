@@ -452,7 +452,7 @@ def bulyan(updates, fraction_byzantine, **kwargs):
     # 4. Gather the actual values for those β clients per coordinate.
     #    For coordinate d: select selected_matrix[beta_idx[:, d], d]
     #    Fully vectorized via advanced indexing — no loop over parameters.
-    beta_values = selected_matrix[beta_idx, torch.arange(selected_matrix.shape[1], device=selected_matrix.device)]
+    beta_values = selected_matrix[beta_idx, torch.arange(selected_matrix.shape[1], device=selected_matrix.device).unsqueeze(0)]
     # beta_values shape: (beta, dim)
 
     # 5. Mean of the β selected values per coordinate

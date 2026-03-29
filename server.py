@@ -54,23 +54,31 @@ class Server:
         
         print(f"    [Server] Fixed Byzantine Clients (Count: {num_byzantine}): {sorted(list(self.fixed_byzantine_indices))}")
         
-        # --- Random Attack Schedules ---
-        # Generate a start and end round for each traitor
+        # --- Attack Schedules ---
         self.byzantine_schedules = {}
-        for client_id in self.fixed_byzantine_indices:
-            # Ensure valid range
-            limit_from_total = max(0, config.NUM_ROUNDS - config.ATTACK_WINDOW_MIN_DURATION)
-            actual_max_start = min(limit_from_total, config.ATTACK_DEADLINE_ROUND)
-            
-            # Beta distribution biases ~80% of start rounds into early rounds
-            # betavariate(2, 5) has mean ~0.28, so most values cluster near 0
-            start_round = int(random.betavariate(2, 5) * actual_max_start)
-            
-            duration = random.randint(config.ATTACK_WINDOW_MIN_DURATION, config.ATTACK_WINDOW_MAX_DURATION)
-            end_round = start_round + duration
-            
-            self.byzantine_schedules[client_id] = (start_round, end_round)
-            print(f"    [Server] Traitor {client_id} will attack from Round {start_round} to {end_round}")
+        
+        if getattr(config, 'PERSISTENT_ATTACK_WINDOW', False):
+            # ABLATION MODE: All traitors attack for the entire run.
+            # Guarantees identical attack pressure across all experiments.
+            print("    [Server] PERSISTENT_ATTACK_WINDOW=True: All traitors will attack every round.")
+            for client_id in self.fixed_byzantine_indices:
+                self.byzantine_schedules[client_id] = (0, config.NUM_ROUNDS)
+                print(f"    [Server] Traitor {client_id} will attack from Round 0 to {config.NUM_ROUNDS} (persistent)")
+        else:
+            # STANDARD MODE: Each traitor gets a random Beta-distributed attack window.
+            for client_id in self.fixed_byzantine_indices:
+                limit_from_total = max(0, config.NUM_ROUNDS - config.ATTACK_WINDOW_MIN_DURATION)
+                actual_max_start = min(limit_from_total, config.ATTACK_DEADLINE_ROUND)
+                
+                # Beta distribution biases ~80% of start rounds into early rounds
+                # betavariate(2, 5) has mean ~0.28, so most values cluster near 0
+                start_round = int(random.betavariate(2, 5) * actual_max_start)
+                
+                duration = random.randint(config.ATTACK_WINDOW_MIN_DURATION, config.ATTACK_WINDOW_MAX_DURATION)
+                end_round = start_round + duration
+                
+                self.byzantine_schedules[client_id] = (start_round, end_round)
+                print(f"    [Server] Traitor {client_id} will attack from Round {start_round} to {end_round}")
 
     def select_clients(self, all_clients):
         num_to_select = random.randint(
