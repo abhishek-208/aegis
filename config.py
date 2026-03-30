@@ -36,7 +36,7 @@ MIN_LR = 1e-4              # Minimum learning rate limit
 
 # --- === 5. Server Aggregation & Momentum Parameters === ---
 # Server Momentum acts as an inertia buff against massive late-stage accuracy drops.
-SERVER_MOMENTUM_ENABLED = True      # If False, works as standard FL.
+SERVER_MOMENTUM_ENABLED = False      # If False, works as standard FL.
 SERVER_MOMENTUM = 0.7               # FedAvgM momentum parameter (velocity to keep).
 SERVER_LEARNING_RATE = 1.0          # Server step size.
 
@@ -73,11 +73,11 @@ ALIE_USE_OMNISCIENT = False         # True = use all gradients, False = only tra
 # If PERSISTENT_ATTACK_WINDOW = True, ALL traitors attack from round 0 to NUM_ROUNDS.
 # This guarantees identical, full-run attack pressure across ALL ablation experiments.
 # Set to False to use the random Beta-distributed start/end schedule below.
-PERSISTENT_ATTACK_WINDOW = True     # Recommended: True for Ablation, False for standard runs
+PERSISTENT_ATTACK_WINDOW = False     # Recommended: True for Ablation, False for standard runs
 
 ATTACK_WINDOW_MIN_DURATION = 10     # Minimum active attack window length (used only if PERSISTENT=False)
 ATTACK_WINDOW_MAX_DURATION = 200    # Maximum active attack window length (used only if PERSISTENT=False)
-EXPECTED_CONVERGENCE_ROUNDS = 400   # Used to calculate the deadline                (used only if PERSISTENT=False)
+EXPECTED_CONVERGENCE_ROUNDS = 400   # Used to calculate the deadline (used only if PERSISTENT=False)
 ATTACK_DEADLINE_PERCENT = 0.50      # Attacks must start prior to this % of convergence (used only if PERSISTENT=False)
 ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)
 
@@ -87,13 +87,14 @@ MAX_PARALLEL_CLIENTS = 1            # 1 for Serial/GPU, None for maximum CPU thr
 DATALOADER_WORKERS = 0              # MUST stay 0 if Multiprocessing clients > 0
 
 # --- === 10. Evaluation & Early Stopping === ---
-EVALUATE_EVERY_N_ROUNDS = 5
+EVALUATE_EVERY_N_ROUNDS = 1
 EARLY_STOPPING_ENABLED = True
-PATIENCE = 20                       # Wait time for loss improvement (20 evals × 5 rounds = 100 real rounds)
+PATIENCE = 50                       # Wait time for loss improvement (20 evals × 5 rounds = 100 real rounds)
 MIN_DELTA = 0.001                   # Substantial enough loss drop to reset patience
 
 # --- === 11. Output, Visualization & System === ---
-RESULTS_DIR = './saved_models'      # './saved_models' for Modal, 'C:/...' for local
+# RESULTS_DIR = './saved_models'      # './saved_models' for Modal, 'C:/...' for local
+RESULTS_DIR = 'D:\IITD\MTP 2\Results'      # './saved_models' for Modal, 'C:/...' for 
 VISUALIZE_GRADIENTS = False         # Master toggle for distance scatters
 VISUALIZE_EVERY_N_ROUNDS = 10       
 AUTO_SHUTDOWN = False               # Automatically turn off machine post-run

@@ -531,6 +531,11 @@ def run_simulation(exp_config):
     participant_counts = []
     adaptive_k_history = [] # Track k over time in case of adaptive k
     
+    # --- Defense Quality Metrics (for Aegis) ---
+    defense_accuracy_history = []
+    detection_rate_history = []
+    precision_history = []
+    
     # Early Stopping Initialization
     best_loss = float('inf')
     patience_counter = 0
@@ -558,6 +563,14 @@ def run_simulation(exp_config):
         
         # Track adaptive k
         adaptive_k_history.append(round_timings.get("adaptive_k", None))
+        
+        # Track defense metrics
+        if round_timings.get("accuracy") is not None:
+             defense_accuracy_history.append(round_timings["accuracy"])
+        if round_timings.get("detection_rate") is not None:
+             detection_rate_history.append(round_timings["detection_rate"])
+        if round_timings.get("precision") is not None:
+             precision_history.append(round_timings["precision"])
         
         # --- Step 4: Evaluate (Timed) ---
         if (round_num + 1) % config.EVALUATE_EVERY_N_ROUNDS == 0:
@@ -630,6 +643,15 @@ def run_simulation(exp_config):
     print(f"    {'-'*28:<28} | {'-'*10:<10} | {'-'*10:<10}")
     print(f"    {'Total':<28} | {total_duration:<10.2f} | 100.0%")
     
+    # --- Compute Average Defense Metrics ---
+    import numpy as np
+    avg_defense_acc = np.mean(defense_accuracy_history) * 100 if defense_accuracy_history else None
+    avg_detection_rate = np.mean(detection_rate_history) * 100 if detection_rate_history else None
+    avg_precision = np.mean(precision_history) * 100 if precision_history else None
+    
+    if avg_defense_acc is not None:
+        print(f"\n    [Defense Stats] Average Accuracy: {avg_defense_acc:.1f}% | Detection Rate: {avg_detection_rate:.1f}% | Precision: {avg_precision:.1f}%")
+
     # Return the results
     return {
         "label": exp_config['label'],
@@ -640,6 +662,9 @@ def run_simulation(exp_config):
         "attack_intensity": attack_intensity_history,
         "participant_counts": participant_counts,
         "adaptive_k_history": adaptive_k_history,
+        "avg_defense_acc": avg_defense_acc,
+        "avg_detection_rate": avg_detection_rate,
+        "avg_precision": avg_precision,
         "duration": total_duration
     }
 

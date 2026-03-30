@@ -194,8 +194,15 @@ def aegis(updates, current_round=None,
     if len(approved_indices) == 0:
         print("    > Aegis: All clients discarded as outliers! Skipping round.")
         return None, None
+    
+    # Map approved/rejected indices back to client IDs for interpretability
+    all_client_ids = [u[0] for u in updates]
+    approved_ids = sorted([all_client_ids[i] for i in approved_indices.tolist()])
+    rejected_ids  = sorted([all_client_ids[i] for i in range(len(updates)) if i not in set(approved_indices.tolist())])
         
     print(f"    > Aegis: Approved {len(approved_indices)}/{len(updates)} clients (Rejected {len(updates) - len(approved_indices)}).")
+    print(f"    > Aegis: Approved IDs: {approved_ids}")
+    print(f"    > Aegis: Rejected IDs: {rejected_ids}")
 
     # --- Step 5: Calculate Enhanced Credit Scores ---
     approved_data_sizes = all_data_sizes_tensor[approved_indices]
@@ -234,7 +241,9 @@ def aegis(updates, current_round=None,
     stats = {
         "weights_matrix": weights_matrix.cpu().numpy(),
         "approved_indices": approved_indices.cpu().numpy(),
-        "adaptive_k": k if ADAPTIVE_THRESHOLD_ENABLED else None # Return k for plotting
+        "approved_ids": approved_ids,
+        "rejected_ids": rejected_ids,
+        "adaptive_k": k if ADAPTIVE_THRESHOLD_ENABLED else None
     }
     
     return new_global_model_dict, stats

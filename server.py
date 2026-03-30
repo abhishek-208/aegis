@@ -124,7 +124,8 @@ class Server:
         num_byzantine = len(actual_attackers)
         
         # Always print round info
-        print(f"    > Round Info: {len(selected_clients)} Participants, {num_byzantine} Active Attackers ({attack_type})")
+        attacker_ids_str = sorted(list(byzantine_client_set))
+        print(f"    > Round Info: {len(selected_clients)} Participants, {num_byzantine} Active Attackers {attacker_ids_str} ({attack_type})")
 
         # --- Step 3: Local Training ---
         t_start_train = time.time()
@@ -275,6 +276,30 @@ class Server:
             torch.cuda.synchronize()
         t_end_agg = time.time()
         
+        # --- FP / FN Diagnostics (Server is the omniscient simulation controller) ---
+        # The aggregator returned approved/rejected IDs based solely on update statistics.
+        # We cross-reference here against ground truth — the aggregator itself never sees this.
+        if agg_stats and 'rejected_ids' in agg_stats:
+            rejected_set    = set(agg_stats['rejected_ids'])
+            approved_set    = set(agg_stats['approved_ids'])
+            byz_set         = byzantine_client_set  # Ground truth known only to server
+
+            true_positives  = rejected_set & byz_set          # Attackers correctly caught
+            false_positives = rejected_set - byz_set          # Honest clients wrongly rejected
+            false_negatives = approved_set & byz_set          # Attackers that slipped through
+            true_negatives  = approved_set - byz_set          # Honest clients correctly approved
+
+            total_clients = len(selected_clients)
+            # Accuracy = (TP + TN) / (TP + TN + FP + FN)
+            accuracy = (len(true_positives) + len(true_negatives)) / total_clients * 100
+            # Detection Rate (Recall) = TP / (TP + FN)
+            detection_rate = len(true_positives) / (len(true_positives) + len(false_negatives)) * 100 if (len(true_positives) + len(false_negatives)) > 0 else 0
+            # Precision = TP / (TP + FP)
+            precision = len(true_positives) / (len(true_positives) + len(false_positives)) * 100 if (len(true_positives) + len(false_positives)) > 0 else 0
+
+            print(f"    > [Server Eval] Accuracy={accuracy:.1f}% | Detection Rate={detection_rate:.1f}% | Precision={precision:.1f}%")
+            print(f"    > [Server Eval] TP={len(true_positives)} | FP={len(false_positives)} {sorted(false_positives)} | FN={len(false_negatives)} {sorted(false_negatives)}")
+        
         # --- Visualization: PCA Projection ---
         viz_data = None
         if agg_stats:
@@ -354,8 +379,27 @@ class Server:
 
         # Extract stats (e.g., adaptive k)
         adaptive_k = None
+        accuracy, detection_rate, precision = None, None, None
+        
         if agg_stats and "adaptive_k" in agg_stats:
             adaptive_k = agg_stats["adaptive_k"]
+            
+        # Re-capture metrics for returning to main.py
+        if agg_stats and 'rejected_ids' in agg_stats:
+            # Re-calculate to avoid scope issues, using the same variables we just printed
+            rejected_set = set(agg_stats['rejected_ids'])
+            approved_set = set(agg_stats['approved_ids'])
+            byz_set = byzantine_client_set
+            
+            tp = len(rejected_set & byz_set)
+            fn = len(approved_set & byz_set)
+            fp = len(rejected_set - byz_set)
+            tn = len(approved_set - byz_set)
+            
+            total = len(selected_clients)
+            accuracy = (tp + tn) / total if total > 0 else 0
+            detection_rate = tp / (tp + fn) if (tp + fn) > 0 else 0
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
 
         # --- Step 6: Learning Rate Decay ---
         if config.LR_DECAY_ENABLED:
@@ -367,7 +411,10 @@ class Server:
             "viz_data": viz_data,
             "num_byzantine": num_byzantine,
             "num_selected": len(selected_clients),
-            "adaptive_k": adaptive_k # Pass k to main.py
+            "adaptive_k": adaptive_k,
+            "accuracy": accuracy,
+            "detection_rate": detection_rate,
+            "precision": precision
         }
 
     def evaluate(self):

@@ -254,11 +254,11 @@ def plot_results(all_results, config_module):
     save_path_loss = os.path.join(config_module.RESULTS_DIR, f"{base_filename}_loss_line.png")
     
     fig_acc.tight_layout(pad=3.0)
-    fig_acc.subplots_adjust(bottom=0.25, top=0.90) # Room for legend/params below
+    fig_acc.subplots_adjust(bottom=0.30, top=0.90) # Room for legend/params/metrics below
     fig_acc.savefig(save_path_acc, dpi=300)
     
     fig_loss.tight_layout(pad=3.0)
-    fig_loss.subplots_adjust(bottom=0.25, top=0.90) # Room for legend/params below
+    fig_loss.subplots_adjust(bottom=0.30, top=0.90) # Room for legend/params/metrics below
     fig_loss.savefig(save_path_loss, dpi=300)
     
     print(f"  > Line plot (Accuracy) saved to {save_path_acc}")
@@ -435,3 +435,30 @@ def plot_gradient_scatter(viz_data, round_num, config_module, exp_label):
     plt.close(fig) # Close to modify memory usage
     
     return save_path
+
+
+def _add_defense_metrics_box(ax, all_results):
+    """
+    Adds a summary text box to the plot showing average defense metrics
+    (Accuracy, Detection Rate, Precision) for Aegis scenarios only.
+    """
+    metrics_lines = []
+
+    for res in all_results:
+        if res.get('avg_defense_acc') is not None:
+            label = res['label']
+            short_label = (label[:28] + '..') if len(label) > 28 else label
+            line = (f"{short_label}:\n"
+                    f"  Accuracy:       {res['avg_defense_acc']:.1f}%\n"
+                    f"  Detection Rate: {res['avg_detection_rate']:.1f}%\n"
+                    f"  Precision:      {res['avg_precision']:.1f}%")
+            metrics_lines.append(line)
+
+    if not metrics_lines:
+        return
+
+    full_text = "Aegis Defense Quality (Avg)\n" + "\n".join(metrics_lines)
+    props = dict(boxstyle='round', facecolor='#f0f4ff', alpha=0.85, edgecolor='#7f8c8d')
+    # Placed at center (x=0.35), same row as Parameters box (y=-0.12)
+    ax.text(0.35, -0.12, full_text, transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', bbox=props, family='monospace')
