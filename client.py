@@ -13,19 +13,21 @@ from model import get_model
 
 # --- === Byzantine Attack Implementation === ---
 
-def apply_attack(weights, global_weights, attack_type, scale_factor=1.0, prev_global_weights=None):
+def apply_attack(weights, global_weights, attack_type, scale_factor=1.0):
     """Corrupts a set of model weights based on the specified attack type."""
-    if attack_type in ['none', 'label_flip', 'alie', 'volume_spam']:
+    if attack_type in ['none', 'label_flip', 'alie', 'ipm', 'volume_spam', 'sybil']:
         # none: honest client
         # label_flip: only labels are altered during train(), gradients flow normally
         # alie: orchestrated centrally by the server (uses cross-client stats)
+        # ipm: orchestrated centrally by the server (negated scaled mean of honest deltas)
         # volume_spam: only report size is altered in Client.train(); weights are honest
+        # sybil: poisoning happens via label-flip during train(); cloning happens in server.py
         return weights
     
     corrupted_weights = OrderedDict()
     
-    if attack_type == 'sign_flip' or attack_type == 'sybil':
-        # Sybil attack applies model poisoning similarly to sign_flip
+    if attack_type == 'sign_flip':
+        # Flip the direction of the honest update
         for key, tensor in weights.items():
             global_tensor = global_weights[key].to(tensor.device)
             delta = tensor - global_tensor
@@ -33,39 +35,44 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0, prev_gl
             corrupted_weights[key] = global_tensor - (scale_factor * delta)
         return corrupted_weights
         
-    elif attack_type == 'additive_noise' or attack_type == 'catastrophic_noise':
+    elif attack_type in ['additive_noise', 'catastrophic_noise', 'pure_additive_noise']:
         # Gaussian Noise on Deltas
         for key, tensor in weights.items():
             global_tensor = global_weights[key].to(tensor.device)
             delta = tensor - global_tensor
             
-            # Generate random gaussian noise
-            noise = torch.randn_like(delta)
-            
-            # Determine the scaling factor
-            if attack_type == 'catastrophic_noise':
-                multiplier = 1000.0  # Massive explosion to stress-test clipping defenses
+            if attack_type == 'pure_additive_noise':
+                # Standard formulation: fixed variance N(0, σ²I) independent of delta magnitude
+                # Uses ATTACK_NOISE_STD as the fixed standard deviation
+                fixed_sigma = getattr(config, 'ATTACK_NOISE_STD', 2.0)
+                noise = torch.randn_like(delta) * fixed_sigma
+                corrupted_weights[key] = global_tensor + delta + noise
             else:
-                multiplier = getattr(config, 'ATTACK_NOISE_STD', 2.0)  # Stealth mode
-            
-            # Scale the noise to be a multiple of the honest delta's norm to stay somewhat stealthy
-            delta_norm = torch.norm(delta)
-            noise_norm = torch.norm(noise)
-            
-            # Fallback to avoid division by zero if noise matrix is completely zero
-            if noise_norm > 1e-9:
-                 scaled_noise = noise * (delta_norm / noise_norm) * multiplier
-            else:
-                 scaled_noise = noise
-                 
-            corrupted_weights[key] = global_tensor + delta + scaled_noise
+                # Original stealth formulation: noise magnitude is proportional to honest delta norm
+                noise = torch.randn_like(delta)
+                
+                # Determine the scaling factor
+                if attack_type == 'catastrophic_noise':
+                    multiplier = 1000.0  # Massive explosion
+                else:
+                    multiplier = getattr(config, 'ATTACK_NOISE_STD', 2.0)  # Stealth mode
+                
+                # Scale the noise to be a multiple of the honest delta's norm to stay somewhat stealthy
+                delta_norm = torch.norm(delta)
+                noise_norm = torch.norm(noise)
+                
+                if noise_norm > 1e-9:
+                     scaled_noise = noise * (delta_norm / noise_norm) * multiplier
+                else:
+                     scaled_noise = noise
+                     
+                corrupted_weights[key] = global_tensor + delta + scaled_noise
             
         return corrupted_weights
         
-    elif attack_type == 'orthogonal' or attack_type == 'informed_orthogonal':
+    elif attack_type == 'orthogonal':
         # Delta-Aware Orthogonal Noise Attack
         # 'orthogonal': orthogonalizes against the client's own honest gradient (naive)
-        # 'informed_orthogonal': orthogonalizes against the server's previous global delta (omniscient)
         for key, tensor in weights.items():
             global_tensor = global_weights[key].to(tensor.device)   
             
@@ -73,15 +80,7 @@ def apply_attack(weights, global_weights, attack_type, scale_factor=1.0, prev_gl
             honest_delta = tensor - global_tensor
             
             # Step 2: Determine which delta to orthogonalize against
-            if attack_type == 'informed_orthogonal' and prev_global_weights is not None:
-                prev_global_tensor = prev_global_weights[key].to(tensor.device)
-                # The server's step direction from the previous round
-                target_delta = global_tensor - prev_global_tensor
-                # If target_delta is zero (e.g. Round 1), fall back to honest_delta
-                if torch.norm(target_delta) < 1e-9:
-                    target_delta = honest_delta
-            else:
-                target_delta = honest_delta
+            target_delta = honest_delta
                 
             # Step 3: Generate entirely random Gaussian noise
             noise = torch.randn_like(honest_delta)
@@ -127,7 +126,6 @@ class Client:
         self.client_id = client_id
         self.dataloader = dataloader
         self.device = config.DEVICE
-        self.prev_global_model_state_dict = None
 
     def train(self, global_model_state_dict, is_byzantine=False, attack_type='none', force_device=None, current_lr=None):
         """Performs one round of local training."""
@@ -156,8 +154,10 @@ class Client:
                 data, target = data.to(train_device), target.to(train_device)
                 
                 # --- Label Flipping Logic ---
-                # Used for 'label_flip' only now. (Volume spam sends honest weights to isolate threshold testing)
-                if is_byzantine and attack_type == 'label_flip':
+                # Used for 'label_flip', 'sybil', and 'volume_spam'. 
+                # Volume spam needs poisoned gradients to test the synergy between 
+                # volume-bounding and directional filters.
+                if is_byzantine and attack_type in ('label_flip', 'sybil', 'volume_spam'):
                     # Shift labels by 1 (target mod 10)
                     target = (target + 1) % 10
                 
@@ -172,10 +172,7 @@ class Client:
         
         # --- Step 3: Apply Attack (if Byzantine) ---
         if is_byzantine:
-            corrupted_weights = apply_attack(local_weights, global_model_state_dict, attack_type, prev_global_weights=self.prev_global_model_state_dict)
-            
-            # Save the current rounded global model so we can use it to guess the median NEXT round
-            self.prev_global_model_state_dict = copy.deepcopy(global_model_state_dict)
+            corrupted_weights = apply_attack(local_weights, global_model_state_dict, attack_type)
             
             # --- Volume Spam Logic ---
             if attack_type == 'volume_spam':
@@ -185,6 +182,4 @@ class Client:
             
             return self.client_id, corrupted_weights, len(self.dataloader.dataset)
         else:
-            # Save the current rounded global model even if honest (just in case they turn Byzantine next round)
-            self.prev_global_model_state_dict = copy.deepcopy(global_model_state_dict)
             return self.client_id, local_weights, len(self.dataloader.dataset)

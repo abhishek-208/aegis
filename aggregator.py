@@ -129,65 +129,107 @@ def aegis(updates, current_round=None,
     # shape: (n_clients, dim)
     deltas_matrix = weights_matrix - flat_global.unsqueeze(0)
 
-    # --- Step 2: Calculate Robust Center and Euclidean Distances (ON DELTAS) ---
-    # Use deltas for median computation
-    d_median = torch.median(deltas_matrix, dim=0).values   # Coordinate wise median of updates
-    
-    # Euclidean distance of each client's UPDATE from the median UPDATE
+    # ==================================================================
+    # STEPS 2–4: TWO-PASS ROBUST CENTER + DUAL FILTERING
+    # ==================================================================
+    # The single-pass approach computes the coordinate-wise median over
+    # ALL clients, including Byzantines. Under sign-flip or IPM attacks,
+    # the negative-direction gradients bias the median's magnitude and
+    # subtly shift its per-coordinate direction, causing some honest
+    # non-IID clients to receive distorted cosine similarity scores
+    # (false positives).
+    #
+    # The two-pass approach fixes this:
+    #   Pass 1: Compute a preliminary median from all clients. Use it
+    #           to identify clients with cos_sim < 0 (clearly adversarial
+    #           direction). Remove them from the pool.
+    #   Pass 2: Recompute the median from the CLEANED pool. This debiased
+    #           median becomes the reference for all downstream scoring:
+    #           Euclidean distances, MAD threshold, cosine similarities,
+    #           and credit scores.
+    #
+    # Complexity remains O(kd) — both passes are linear in clients × dim.
+    # ==================================================================
+
+    # -------- PASS 1: Preliminary median → directional screening --------
+    d_median_preliminary = torch.median(deltas_matrix, dim=0).values
+
+    cos_sim_preliminary = torch.nn.functional.cosine_similarity(
+        deltas_matrix, d_median_preliminary.unsqueeze(0), dim=1
+    )
+
+    # Identify clients whose direction is clearly adversarial (opposite
+    # hemisphere from the preliminary median). These are the sign-flip,
+    # IPM (large ε), and other direction-reversal attackers.
+    if not ablate_directional:
+        directional_survivors_mask = cos_sim_preliminary >= 0.0
+    else:
+        # If directional filtering is ablated, skip Pass 1 screening
+        directional_survivors_mask = torch.ones(len(updates), dtype=torch.bool, device=DEVICE)
+
+    surviving_indices_pass1 = torch.where(directional_survivors_mask)[0]
+    num_rejected_pass1 = len(updates) - len(surviving_indices_pass1)
+
+    if num_rejected_pass1 > 0:
+        print(f"    > Aegis Pass 1: Removed {num_rejected_pass1} directionally adversarial clients.")
+
+    # -------- PASS 2: Debiased median from cleaned pool --------
+    if len(surviving_indices_pass1) >= 2:
+        # Recompute median using ONLY the clients that survived Pass 1.
+        # This median is uncontaminated by sign-flip / IPM attackers.
+        d_median = torch.median(deltas_matrix[surviving_indices_pass1], dim=0).values
+    else:
+        # Edge case: nearly everyone was rejected in Pass 1.
+        # Fall back to the preliminary median to avoid crashing.
+        print("    > Aegis Pass 2: WARNING — fewer than 2 survivors. Using preliminary median.")
+        d_median = d_median_preliminary
+
+    # -------- STEP 3 (final): Dual anomaly scores against CLEAN median --------
+    # All clients (including those rejected in Pass 1) are re-scored against
+    # the debiased median. This gives everyone a fair evaluation — an honest
+    # non-IID client that was borderline against the biased median may now
+    # have a safely positive cosine score against the clean median.
     euclidean_distances = torch.norm(deltas_matrix - d_median, dim=1)
-    
-    # --- Step 3: Calculate Cosine Similarity & Penalty (ON DELTAS) ---
-    # Cosine Sim between each client UPDATE and the median UPDATE
-    cos_sim = torch.nn.functional.cosine_similarity(deltas_matrix, d_median.unsqueeze(0), dim=1)
-    
 
+    cos_sim = torch.nn.functional.cosine_similarity(
+        deltas_matrix, d_median.unsqueeze(0), dim=1
+    )
 
-    # Penalty: 0.0 (perfect alignment) to 2.0 (opposite direction)
     cosine_penalty = 1.0 - cos_sim
 
-    # --- Step 4: Hard Filtering (MAD + Directional) ---
-    # A. Euclidean Stats
-    median_distance = torch.median(euclidean_distances)    # median distance
-    distance_mad = torch.median(torch.abs(euclidean_distances - median_distance))    # median absolute deviation
+    # -------- STEP 4: Adaptive Thresholding & Dual Filtering --------
+    # A. Euclidean Stats (now computed from debiased distances)
+    median_distance = torch.median(euclidean_distances)
+    distance_mad = torch.median(torch.abs(euclidean_distances - median_distance))
 
     # Compute adaptive k (Strategy A + C) or use fixed value
     if ADAPTIVE_THRESHOLD_ENABLED and current_round is not None and not ablate_adaptive:
-        # Strategy A: Round-Based Decay — k_phase decays linearly from K_MAX to K_MIN
+        # Strategy A: Round-Based Decay
         progress = min(current_round / WARMUP_ROUNDS, 1.0)
         k_phase = K_MAX - (K_MAX - K_MIN) * progress
 
-        # Strategy C: Variance-Normalized — self-calibrate based on coefficient of variation
+        # Strategy C: Variance-Normalized
         coeff_of_variation = distance_mad / (median_distance + RWA_EPSILON)
         k = k_phase * (1.0 + VARIANCE_SENSITIVITY * coeff_of_variation.item())
-        k = max(k, K_SAFE_FLOOR) # Safety clamp
+        k = max(k, K_SAFE_FLOOR)
 
         print(f"    > Adaptive k: {k:.3f} (phase={k_phase:.2f}, CV={coeff_of_variation:.4f}, round={current_round + 1})")
     else:
         k = OUTLIER_SENSITIVITY
-        if ADAPTIVE_THRESHOLD_ENABLED: 
-            # If enabled but current_round is None (e.g. first call), we still want to track k
-            # But usually it is passed. If not passed, we can't adapt.
-             pass 
 
     rejection_cutoff = median_distance + (k * distance_mad)
-    
 
-
-    # B. Filter Logic
-    # Reject if Distance > Threshold OR Cosine Similarity < 0 (Opposite direction)
-    # Using indices logic
-    
+    # B. Final dual filter (re-evaluated against the CLEAN median)
     if not ablate_euclidean_filter:
         pass_euclidean = euclidean_distances <= rejection_cutoff
     else:
         pass_euclidean = torch.ones_like(euclidean_distances, dtype=torch.bool)
-    
+
     if not ablate_directional:
-        pass_direction = cos_sim >= 0.0 # Reject negative cosine similarity
+        pass_direction = cos_sim >= 0.0
     else:
-        # Ignore direction
         pass_direction = torch.ones_like(cos_sim, dtype=torch.bool)
-    
+
     approved_mask = pass_euclidean & pass_direction
     approved_indices = torch.where(approved_mask)[0]
     

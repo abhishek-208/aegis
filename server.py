@@ -54,31 +54,7 @@ class Server:
         
         print(f"    [Server] Fixed Byzantine Clients (Count: {num_byzantine}): {sorted(list(self.fixed_byzantine_indices))}")
         
-        # --- Attack Schedules ---
-        self.byzantine_schedules = {}
-        
-        if getattr(config, 'PERSISTENT_ATTACK_WINDOW', False):
-            # ABLATION MODE: All traitors attack for the entire run.
-            # Guarantees identical attack pressure across all experiments.
-            print("    [Server] PERSISTENT_ATTACK_WINDOW=True: All traitors will attack every round.")
-            for client_id in self.fixed_byzantine_indices:
-                self.byzantine_schedules[client_id] = (0, config.NUM_ROUNDS)
-                print(f"    [Server] Traitor {client_id} will attack from Round 0 to {config.NUM_ROUNDS} (persistent)")
-        else:
-            # STANDARD MODE: Each traitor gets a random Beta-distributed attack window.
-            for client_id in self.fixed_byzantine_indices:
-                limit_from_total = max(0, config.NUM_ROUNDS - config.ATTACK_WINDOW_MIN_DURATION)
-                actual_max_start = min(limit_from_total, config.ATTACK_DEADLINE_ROUND)
-                
-                # Beta distribution biases ~80% of start rounds into early rounds
-                # betavariate(2, 5) has mean ~0.28, so most values cluster near 0
-                start_round = int(random.betavariate(2, 5) * actual_max_start)
-                
-                duration = random.randint(config.ATTACK_WINDOW_MIN_DURATION, config.ATTACK_WINDOW_MAX_DURATION)
-                end_round = start_round + duration
-                
-                self.byzantine_schedules[client_id] = (start_round, end_round)
-                print(f"    [Server] Traitor {client_id} will attack from Round {start_round} to {end_round}")
+        # Attack schedules have been removed; traitors attack whenever sampled.
 
     def select_clients(self, all_clients):
         num_to_select = random.randint(
@@ -97,8 +73,7 @@ class Server:
         # --- Step 2: Determine Attackers for this Round ---
         # Logic: A client is an attacker IF:
         # 1. They are in the fixed byzantine list AND
-        # 2. The current round is within their attack window AND
-        # 3. They pass the probabilistic check (ATTACK_PROBABILITY)
+        # 2. They pass the probabilistic check (ATTACK_PROBABILITY)
         
         actual_attackers = []
         
@@ -106,19 +81,9 @@ class Server:
         if attack_type != 'none':
             for client in selected_clients:
                 if client.client_id in self.fixed_byzantine_indices:
-                    # This client is a Traitor. Are they in their attack window?
-                    is_active = False
-                    if current_round is not None:
-                        start, end = self.byzantine_schedules.get(client.client_id, (0, 0))
-                        if start <= current_round <= end:
-                            is_active = True
-                    else:
-                        # Fallback if current_round not provided
-                        is_active = True
-                    
-                    if is_active:
-                         if random.random() < config.ATTACK_PROBABILITY:
-                             actual_attackers.append(client)
+                    # This client is a Traitor.
+                    if random.random() < config.ATTACK_PROBABILITY:
+                         actual_attackers.append(client)
         
         byzantine_client_set = set(c.client_id for c in actual_attackers)
         num_byzantine = len(actual_attackers)
@@ -163,24 +128,30 @@ class Server:
         t_end_train = time.time()
         print(f"    > Training Time: {t_end_train - t_start_train:.2f}s")
         
-        # --- SYBIL ATTACK SYNCHRONIZATION ---
-        # If this is a Sybil attack, all attackers must submit the exact same update.
+        # --- SYBIL CLONE INJECTION ---
+        # True Sybil attack: each real Byzantine client already trained with label-flipped data
+        # (producing plausible-looking but poisoned updates). Now we duplicate each attacker's
+        # update into NUM_SYBILS_PER_ATTACKER clones with deterministic fake IDs.
+        # The aggregator receives the inflated list and processes it blindly.
+        num_sybil_clones = 0
         if attack_type == 'sybil' and len(byzantine_client_set) > 0:
-            sybil_base_update = None
+            import copy
+            sybil_clones = []
             for update in updates:
                 c_id, w, n_samp = update
                 if c_id in byzantine_client_set:
-                    # Use deepcopy to prevent in-place corruption by aggregators
-                    import copy
-                    sybil_base_update = (copy.deepcopy(w), n_samp)
-                    break
+                    for clone_idx in range(config.NUM_SYBILS_PER_ATTACKER):
+                        # Deterministic ID: consistent across rounds so FoolsGold
+                        # accumulates continuous history per clone identity.
+                        # Offset by 100 so Client 0 produces 100, 101 instead of 0, 1
+                        fake_id = 100 + (c_id * 10) + clone_idx
+                        sybil_clones.append((fake_id, copy.deepcopy(w), n_samp))
+                        byzantine_client_set.add(fake_id)  # Track clones as malicious for FP/FN diagnostics
             
-            if sybil_base_update is not None:
-                base_w, base_n = sybil_base_update
-                for i in range(len(updates)):
-                    c_id, _, _ = updates[i]
-                    if c_id in byzantine_client_set:
-                        updates[i] = (c_id, base_w, base_n)
+            updates.extend(sybil_clones)
+            num_sybil_clones = len(sybil_clones)
+            print(f"    > Sybil Injection: {num_sybil_clones} clones injected from {num_byzantine} real attackers. "
+                  f"Aggregator now sees {len(updates)} total updates.")
 
         # --- ALIE ATTACK COORDINATION ---
         # "A Little Is Enough" (Baruch et al., NeurIPS 2019)
@@ -229,7 +200,6 @@ class Server:
                     ratio = (n_total - 2 * m_byz) / max(n_total - m_byz, 1)
                     ratio = max(0.001, min(ratio, 0.999))  # Clamp for numerical safety
                     z = scipy_norm.ppf(ratio)
-                    z = max(z, 0.0)  # Floor at 0 — negative z has negligible impact
                 
                 # --- Step D: Craft the poisoned delta ---
                 # g_malicious = μ - z * σ  (pushes every coordinate downward)
@@ -260,6 +230,70 @@ class Server:
             else:
                 print(f"    > [ALIE] Not enough Byzantine clients for stats ({len(stat_deltas)}). "
                       f"Skipping coordination this round.")
+
+        # --- IPM ATTACK COORDINATION ---
+        # "Fall of Empires: Breaking Byzantine-tolerant SGD by Inner Product Manipulation"
+        # Xie, Koyejo, Gupta (UAI 2020, arXiv:1903.03936)
+        #
+        # Each Byzantine client submits:  δ_byz = -ε × μ
+        # where μ is the coordinate-wise mean of the selected clients' deltas and ε = IPM_EPSILON.
+        # This guarantees <g_true, Aggr(updates)> < 0, breaking convergence of any aggregation
+        # rule that does not explicitly enforce positive inner-product alignment.
+        if attack_type == 'ipm' and len(byzantine_client_set) > 0:
+
+            flat_global = torch.cat([p.flatten() for p in global_weights_cpu.values()])
+
+            # Collect deltas from the chosen set of clients
+            if config.IPM_USE_OMNISCIENT:
+                # Omniscient: use ALL clients' deltas (honest + Byzantine) to estimate μ.
+                # Mirrors the paper's primary setting where Byzantine workers can observe
+                # every honest worker's gradient submission.
+                stat_deltas = []
+                for c_id, w, n_samp in updates:
+                    flat_w = torch.cat([v.flatten() for v in w.values()])
+                    stat_deltas.append(flat_w - flat_global)
+            else:
+                # Colluding-only: Byzantine clients use only their own honestly-trained
+                # deltas as a proxy for μ (no cross-client observation required).
+                stat_deltas = []
+                for c_id, w, n_samp in updates:
+                    if c_id in byzantine_client_set:
+                        flat_w = torch.cat([v.flatten() for v in w.values()])
+                        stat_deltas.append(flat_w - flat_global)
+
+            if len(stat_deltas) >= 1:
+                stat_matrix = torch.stack(stat_deltas)   # (n_stat, model_dim)
+
+                # Coordinate-wise mean of selected deltas
+                mu = stat_matrix.mean(dim=0)             # (model_dim,)
+
+                # IPM attack vector: -ε × μ  (paper formula, Definition 3 / Theorem 1)
+                poisoned_delta = -config.IPM_EPSILON * mu
+
+                # Convert from delta space back to weight space
+                poisoned_flat_weights = flat_global + poisoned_delta
+
+                # Unflatten back into a state_dict using the template structure
+                template_dict = updates[0][1]
+                poisoned_weights = OrderedDict()
+                idx = 0
+                for key, tensor in template_dict.items():
+                    numel = tensor.numel()
+                    poisoned_weights[key] = poisoned_flat_weights[idx:idx + numel].reshape(tensor.shape)
+                    idx += numel
+
+                # Replace all Byzantine clients' updates with the single poisoned vector
+                for i in range(len(updates)):
+                    c_id, w, n_samp = updates[i]
+                    if c_id in byzantine_client_set:
+                        updates[i] = (c_id, poisoned_weights, n_samp)
+
+                print(f"    > [IPM] Crafted poisoned gradient: ε={config.IPM_EPSILON:.4f}, "
+                      f"using {'ALL' if config.IPM_USE_OMNISCIENT else 'Byzantine-only'} "
+                      f"gradients ({len(stat_deltas)} clients). "
+                      f"‖μ‖={mu.norm():.4f}, ‖δ_byz‖={poisoned_delta.norm():.4f}")
+            else:
+                print(f"    > [IPM] Not enough clients for μ estimation. Skipping coordination this round.")
 
         # --- Step 4: Aggregation ---
         t_start_agg = time.time()

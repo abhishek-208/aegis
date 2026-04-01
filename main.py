@@ -162,10 +162,10 @@ if config.COMPARE_AEGIS_SCENARIOS:
             },
             {
                 'run': True,
-                'label': "Aegis (Balanced IID - Orthogonal)",
+                'label': "Aegis (Balanced IID - IPM)",
                 'aggregator': aegis,
                 'data_split': 'BALANCED_IID',
-                'attack_type': 'orthogonal',
+                'attack_type': 'ipm',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#e67e22'
             },
@@ -187,15 +187,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#e056fd'
             },
-            {
-                'run': True,
-                'label': "Aegis (Balanced IID - Informed Orthogonal)",
-                'aggregator': aegis,
-                'data_split': 'BALANCED_IID',
-                'attack_type': 'informed_orthogonal',
-                'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': '#686de0'
-            },
+
             {
                 'run': True,
                 'label': "Aegis (Balanced IID - ALIE)",
@@ -204,6 +196,24 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'attack_type': 'alie',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#c0392b'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Pure Additive Noise)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'pure_additive_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#7f8c8d'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Balanced IID - Sybil)",
+                'aggregator': aegis,
+                'data_split': 'BALANCED_IID',
+                'attack_type': 'sybil',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#2c3e50'
             },
         ]
 
@@ -248,10 +258,10 @@ if config.COMPARE_AEGIS_SCENARIOS:
             },
             {
                 'run': True,
-                'label': "Aegis (Unbalanced IID - Orthogonal)",
+                'label': "Aegis (Unbalanced IID - IPM)",
                 'aggregator': aegis,
                 'data_split': 'UNBALANCED_IID',
-                'attack_type': 'orthogonal',
+                'attack_type': 'ipm',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#d35400'
             },
@@ -273,15 +283,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#be2edd'
             },
-            {
-                'run': True,
-                'label': "Aegis (Unbalanced IID - Informed Orthogonal)",
-                'aggregator': aegis,
-                'data_split': 'UNBALANCED_IID',
-                'attack_type': 'informed_orthogonal',
-                'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': '#4834d4'
-            },
+
             {
                 'run': True,
                 'label': "Aegis (Unbalanced IID - ALIE)",
@@ -290,6 +292,24 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'attack_type': 'alie',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#c0392b'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Pure Additive Noise)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'pure_additive_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#95a5a6'
+            },
+            {
+                'run': True,
+                'label': "Aegis (Unbalanced IID - Sybil)",
+                'aggregator': aegis,
+                'data_split': 'UNBALANCED_IID',
+                'attack_type': 'sybil',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#34495e'
             },
         ]
 
@@ -325,6 +345,52 @@ if config.COMPARE_AEGIS_SCENARIOS:
             },
             {
                 'run': True,
+                'label': "Aegis (Non-IID - IPM)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'ipm',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#e67e22'
+            },            
+            {
+                'run': False,
+                'label': "Aegis (Non-IID - Volume Spam)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'volume_spam',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#1abc9c'
+            },        
+            {
+                'run': False,
+                'label': "Aegis (Non-IID - ALIE)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'alie',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#c0392b'
+            },
+
+            {
+                'run': False,
+                'label': "Aegis (Non-IID - Sybil)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'sybil',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#2c3e50'
+            },
+            {
+                'run': False,
+                'label': "Aegis (Non-IID - Pure Additive Noise)",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': 'pure_additive_noise',
+                'fraction_byzantine': config.FRACTION_BYZANTINE,
+                'color': '#bdc3c7'
+            },
+            {
+                'run': False,
                 'label': "Aegis (Non-IID - Additive Noise)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
@@ -333,49 +399,13 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'color': '#3498db'
             },
             {
-                'run': True,
-                'label': "Aegis (Non-IID - Orthogonal)",
-                'aggregator': aegis,
-                'data_split': 'NON_IID',
-                'attack_type': 'orthogonal',
-                'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': '#e67e22'
-            },
-            {
-                'run': True,
-                'label': "Aegis (Non-IID - Volume Spam)",
-                'aggregator': aegis,
-                'data_split': 'NON_IID',
-                'attack_type': 'volume_spam',
-                'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': '#1abc9c'
-            },
-            {
-                'run': True,
+                'run': False,
                 'label': "Aegis (Non-IID - Catastrophic Noise)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
                 'attack_type': 'catastrophic_noise',
                 'fraction_byzantine': config.FRACTION_BYZANTINE,
                 'color': '#e056fd'
-            },
-            {
-                'run': True,
-                'label': "Aegis (Non-IID - Informed Orthogonal)",
-                'aggregator': aegis,
-                'data_split': 'NON_IID',
-                'attack_type': 'informed_orthogonal',
-                'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': '#686de0'
-            },
-            {
-                'run': True,
-                'label': "Aegis (Non-IID - ALIE)",
-                'aggregator': aegis,
-                'data_split': 'NON_IID',
-                'attack_type': 'alie',
-                'fraction_byzantine': config.FRACTION_BYZANTINE,
-                'color': '#c0392b'
             },
         ]
 
@@ -504,25 +534,7 @@ def run_simulation(exp_config):
         test_loader=test_loader
     )
     
-    # --- Sybil Attack: Create Fake Identities ---
-    if exp_config['attack_type'] == 'sybil':
-        num_sybils = getattr(config, 'NUM_SYBILS_PER_ATTACKER', 3)
-        sybil_clients = []
-        for client in all_clients:
-            if client.client_id in server.fixed_byzantine_indices:
-                for i in range(num_sybils):
-                    sybil_id = f"sybil_{client.client_id}_{i}"
-                    sybil_client = Client(sybil_id, client.dataloader)
-                    sybil_clients.append(sybil_client)
-                    
-                    # Register Sybil with server
-                    server.fixed_byzantine_indices.add(sybil_id)
-                    # Inherit attack schedule from the master attacker
-                    start, end = server.byzantine_schedules.get(client.client_id, (0, config.NUM_ROUNDS))
-                    server.byzantine_schedules[sybil_id] = (start, end)
-                    
-        all_clients.extend(sybil_clients)
-        print(f"\n[Sybil Attack] Created {len(sybil_clients)} fake Sybil identities. Total pool now {len(all_clients)}.")
+    
     
     # --- Step 3: Run Training Rounds ---
     accuracy_history = []

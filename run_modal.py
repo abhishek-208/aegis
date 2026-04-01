@@ -1,3 +1,6 @@
+#modal run --detach run_modal.py::execute_aegis
+#modal volume get aegis-results / "D:\IITD\MTP 2\Results"
+#modal app logs aegis-simulation --tail 50000 > aegis_logs.txt
 import modal
 import subprocess
 import os
@@ -6,12 +9,12 @@ app = modal.App("aegis-simulation")
 
 # 1. Define Environment (Code Only)
 # CRITICAL: Do not miss the opening parenthesis on the line below
+# 1. Define Environment (Code Only)
 image = (
     modal.Image.debian_slim()
     .pip_install("torch", "torchvision", "numpy", "scikit-learn", "matplotlib") 
-    .add_local_dir(".", remote_path="/root/aegis", ignore=["venv", ".git", "__pycache__"])
+    .add_local_dir(".", remote_path="/root/aegis", ignore=["venv", ".git", "__pycache__", "saved_models", "aegis-results"])
 )
-
 # 2. Attach Cloud Hard Drives
 results_volume = modal.Volume.from_name("aegis-results", create_if_missing=True)
 data_volume = modal.Volume.from_name("aegis-dataset") 

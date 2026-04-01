@@ -10,38 +10,23 @@ import os
 import config as config # Import config to use its values
 from matplotlib.patches import Patch
 
-def _add_attack_shading(ax, all_results, config_module):
+
+
+def _smooth_exponential(data, weight=0.9):
     """
-    Adds vertical red shading bands to the plot based on attack intensity.
-    Darker red = more attackers that round. Only shades if attack_intensity > 0.
-    Uses the FIRST result that has a non-zero attack to determine shading.
+    Computes Exponential Moving Average (EMA) for smoothing.
+    formula: y[t] = weight * y[t-1] + (1 - weight) * x[t]
     """
-    MAX_ALPHA = 0.9  # Maximum opacity for the shading 
-    
-    for result in all_results:
-        intensities = result.get('attack_intensity', [])
-        if not intensities or max(intensities) == 0:
-            continue
-        
-        # We found a result with attacks — use it for shading
-        for round_idx, intensity in enumerate(intensities):
-            if intensity > 0:
-                round_x = round_idx + 1  # Rounds are 1-indexed
-                alpha = intensity * MAX_ALPHA  # Scale alpha by attack fraction
-                ax.axvspan(
-                    round_x - 0.5, round_x + 0.5,
-                    color='red', alpha=alpha, linewidth=0, zorder=2
-                )
-        
-        # Add legend entry for the shading
-        shading_patch = Patch(
-            facecolor='red', alpha=MAX_ALPHA * 0.5,
-            label=f'Attack Intensity (max {max(intensities)*100:.0f}% Byzantine)'
-        )
-        handles, labels = ax.get_legend_handles_labels()
-        handles.append(shading_patch)
-        ax.legend(handles=handles, loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
-        break  # Only shade once (all experiments share the same attack pattern)
+    if len(data) == 0:
+        return data
+    smoothed = []
+    last = data[0]
+    for val in data:
+        new_val = last * weight + (1 - weight) * val
+        smoothed.append(new_val)
+        last = new_val
+    return smoothed
+
 
 def _add_participant_bars(ax, all_results):
     """
@@ -88,18 +73,53 @@ def plot_results(all_results, config_module):
     """
     print(f"\n[Plotter] Generating 2 result line plots (Accuracy and Loss)...")
     
-    # Parameter text box formatted in rows for the bottom-left
-    param_text = (
-        f"--- Parameters ---\n"
-        f"Total Rounds: {config_module.NUM_ROUNDS}\n"
-        f"Total Clients: {config_module.NUM_CLIENTS}\n"
-        f"Clients/Round: {config_module.MIN_CLIENTS_PER_ROUND}-{config_module.MAX_CLIENTS_PER_ROUND}\n"
-        f"Local Epochs: {config_module.LOCAL_EPOCHS}\n"
-        f"Learning Rate: {config_module.LEARNING_RATE}\n"
-        f"Batch Size: {config_module.BATCH_SIZE}\n"
-        f"Byzantine %: {config_module.FRACTION_BYZANTINE * 100:.0f}%"
+    # Box 1: System Setup
+    split_str = f" ({getattr(config_module, 'SHARDS_PER_CLIENT', 'N/A')} shards/client)" if config_module.DATA_SPLIT_TYPE == 'NON_IID' else ""
+    sys_param_text = (
+        r"$\mathbf{System\ Setup}$" + "\n"
+        f"{'Dataset':<13}: {config_module.DATASET_NAME}\n"
+        f"{'Split':<13}: {config_module.DATA_SPLIT_TYPE}{split_str}\n"
+        f"{'Rounds':<13}: {config_module.NUM_ROUNDS}\n"
+        f"{'Clients/Rd':<13}: {config_module.MIN_CLIENTS_PER_ROUND}-{config_module.MAX_CLIENTS_PER_ROUND} (of {config_module.NUM_CLIENTS})\n"
+        f"{'Local Epochs':<13}: {config_module.LOCAL_EPOCHS}\n"
+        f"{'Batch Size':<13}: {config_module.BATCH_SIZE}\n"
+        f"{'LR':<13}: {config_module.LEARNING_RATE}"
     )
-    props = dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.5)
+
+    # Box 2: Attack Profile
+    # Dynamically read labels to see which attacks are actually plotted
+    plot_labels = " ".join([r.get('label', '').lower() for r in all_results])
+    
+    threat_lines = [f"{'Byzantine (f)':<14}: {getattr(config_module, 'FRACTION_BYZANTINE', 0.0) * 100:.0f}%"]
+    
+    if "noise" in plot_labels:
+        threat_lines.append(f"{'Attacker (σ)':<14}: {getattr(config_module, 'ATTACK_NOISE_STD', 'N/A')}")
+    if "sybil" in plot_labels:
+        threat_lines.append(f"{'Sybil (k)':<14}: {getattr(config_module, 'NUM_SYBILS_PER_ATTACKER', 'N/A')}")
+    if "alie" in plot_labels:
+        threat_lines.append(f"{'ALIE (Z)':<14}: {getattr(config_module, 'ALIE_Z', 'N/A')}")
+    if "ipm" in plot_labels:
+        threat_lines.append(f"{'IPM (ε)':<14}: {getattr(config_module, 'IPM_EPSILON', 'N/A')}")
+
+    # Pad with empty lines so the box height is exactly 8 lines (matching System Setup)
+    while len(threat_lines) < 7:
+        threat_lines.append(" ")
+
+    attack_param_text = r"$\mathbf{Threat\ Model}$" + "\n" + "\n".join(threat_lines)
+
+    # Box 3: Aegis Defense
+    defense_lines = [
+        f"{'Mode':<8}: {'Adaptive' if getattr(config_module, 'ADAPTIVE_THRESHOLD_ENABLED', True) else 'Fixed'}",
+        f"{'k Range':<8}: {getattr(config_module, 'K_MAX', 'N/A')} -> {getattr(config_module, 'K_MIN', 'N/A')}",
+        f"{'k Floor':<8}: {getattr(config_module, 'K_SAFE_FLOOR', 'N/A')}",
+        f"{'Var Sens':<8}: {getattr(config_module, 'VARIANCE_SENSITIVITY', 'N/A')}",
+        " ", # Padding
+        " ", # Padding
+        " "  # Padding
+    ]
+    defense_param_text = r"$\mathbf{Aegis\ Defense}$" + "\n" + "\n".join(defense_lines)
+
+    props = dict(boxstyle='round,pad=0.8', facecolor='#f8f9fa', alpha=0.9, edgecolor='#ced4da')
 
     # Subtitle line with key dataset info
     param_subtitle = (
@@ -137,9 +157,15 @@ def plot_results(all_results, config_module):
             config_module.EVALUATE_EVERY_N_ROUNDS
         )
 
+        # Smoothing parameters
+        # Alpha is the weight of previous points. 0.9 = very smooth.
+        smoothing_weight = getattr(config_module, 'PLOT_SMOOTHING_WEIGHT', 0.85)
+
+        # Plot the smoothed data
+        smoothed_acc = _smooth_exponential(result['history'], weight=smoothing_weight)
         ax_acc.plot(
             actual_rounds,
-            result['history'], # 'history' is the accuracy history
+            smoothed_acc,
             label=plot_label,
             color=result['color'],
             marker=None,
@@ -147,8 +173,8 @@ def plot_results(all_results, config_module):
             linewidth=2.5,
         )
     
+    
     ax_acc.legend(loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
-    _add_attack_shading(ax_acc, all_results, config_module)
     _add_participant_bars(ax_acc, all_results)
     
     # --- Adaptive K Plot (Twin Axis) ---
@@ -187,17 +213,13 @@ def plot_results(all_results, config_module):
         k_line_proxy = plt.Line2D([0], [0], color='black', linewidth=1.0, label='Adaptive Threshold (k)')
         handles, labels = ax_acc.get_legend_handles_labels()
         handles.append(k_line_proxy)
-        ax_acc.legend(handles=handles, loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
+        ax_acc.legend(handles=handles, loc='upper right', bbox_to_anchor=(1.02, -0.12), fontsize=10, ncol=1, framealpha=0.9)
 
 
-    ax_acc.text(
-        0.0, -0.12, param_text, 
-        transform=ax_acc.transAxes, 
-        fontsize=9,
-        verticalalignment='top', 
-        horizontalalignment='left',
-        bbox=props
-    )
+    ax_acc.text(0.00, -0.14, sys_param_text, transform=ax_acc.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='left', bbox=props, family='monospace')
+    ax_acc.text(0.34, -0.14, attack_param_text, transform=ax_acc.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='left', bbox=props, family='monospace')
+    ax_acc.text(0.55, -0.14, defense_param_text, transform=ax_acc.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='left', bbox=props, family='monospace')
+
     
     # --- === 2. LOSS PLOT === ---
     
@@ -222,9 +244,11 @@ def plot_results(all_results, config_module):
             config_module.EVALUATE_EVERY_N_ROUNDS
         )
 
+        # Plot the smoothed data
+        smoothed_loss = _smooth_exponential(result['loss_history'], weight=smoothing_weight)
         ax_loss.plot(
             actual_rounds,
-            result['loss_history'], # This is the   loss history
+            smoothed_loss,
             label=plot_label,
             color=result['color'],
             marker=None,
@@ -232,17 +256,11 @@ def plot_results(all_results, config_module):
             linewidth=2.5,
         )
     
-    ax_loss.legend(loc='upper right', bbox_to_anchor=(1.0, -0.12), fontsize=10, ncol=1, framealpha=0.9)
-    _add_attack_shading(ax_loss, all_results, config_module)
+    ax_loss.legend(loc='upper right', bbox_to_anchor=(1.02, -0.12), fontsize=10, ncol=1, framealpha=0.9)
     _add_participant_bars(ax_loss, all_results)
-    ax_loss.text(
-        0.0, -0.12, param_text, 
-        transform=ax_loss.transAxes, 
-        fontsize=9,
-        verticalalignment='top', 
-        horizontalalignment='left',
-        bbox=props
-    )
+    ax_loss.text(0.00, -0.14, sys_param_text, transform=ax_loss.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='left', bbox=props, family='monospace')
+    ax_loss.text(0.34, -0.14, attack_param_text, transform=ax_loss.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='left', bbox=props, family='monospace')
+    ax_loss.text(0.55, -0.14, defense_param_text, transform=ax_loss.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='left', bbox=props, family='monospace')
 
     # --- === 3. SAVE AND SHOW === ---
     

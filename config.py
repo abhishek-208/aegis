@@ -7,10 +7,10 @@ import torch
 import os 
 
 # --- === 1. Simulation Core Parameters === ---
-NUM_ROUNDS = 1000            # Total number of federated learning rounds
+NUM_ROUNDS = 1000           # Total number of federated learning rounds
 NUM_CLIENTS = 30             # Total number of clients in the pool
 MIN_CLIENTS_PER_ROUND = 15   # Minimum clients to select each round
-MAX_CLIENTS_PER_ROUND = 25   # Maximum clients to select each round
+MAX_CLIENTS_PER_ROUND = 28   # Maximum clients to select each round
 RANDOM_SEED = 42             # Fixed seed for reproducibility control
 
 # --- === 2. Experiment Toggles === ---
@@ -24,7 +24,7 @@ DATASET_NAME = 'CIFAR10'
 DATA_SPLIT_TYPE = 'NON_IID' # Options: 'BALANCED_IID', 'UNBALANCED_IID', or 'NON_IID'
 SHARDS_PER_CLIENT = 4       # For NON_IID: Number of classes/shards per client
 DIRICHLET_ALPHA = 0.5       # For NON_IID Dirichlet splits (if implemented)
-BATCH_SIZE = 256           
+BATCH_SIZE = 32           
 
 # --- === 4. Local Training & LR Decay Parameters === ---
 LOCAL_EPOCHS = 1
@@ -48,7 +48,7 @@ OUTLIER_SENSITIVITY = 3.0           # Fixed fallback when adaptive is disabled
 K_MAX = 6.0                         # Initial (loose) threshold multiplier
 K_MIN = 2.0                         # Final (strict) threshold multiplier (for IID)
 WARMUP_ROUNDS = 300                 # Rounds over which k linearly decays
-K_SAFE_FLOOR = 4.5                  # Absolute minimum k (vital for Non-IID cases)
+K_SAFE_FLOOR = 3                  # Absolute minimum k (vital for Non-IID cases)
 # Strategy C: Variance-Normalized
 VARIANCE_SENSITIVITY = 3.0          # Relaxation scale when updates are highly dispersed
 RWA_EPSILON = 1e-9                  # Numerical stability constant
@@ -57,29 +57,26 @@ RWA_EPSILON = 1e-9                  # Numerical stability constant
 FOOLSGOLD_KAPPA = 1.0               # Higher bounds -> more aggressive suppression
 
 # --- === 8. Byzantine Attack Parameters === ---
-FRACTION_BYZANTINE = 0.40           # Ratio of Byzantine clients in the total pool
+FRACTION_BYZANTINE = 0.30           # Ratio of Byzantine clients in the total pool
 
-# Options: 'none', 'sign_flip', 'additive_noise', 'label_flip', 'orthogonal', 'volume_spam', 'sybil', 'catastrophic_noise', 'informed_orthogonal', 'alie'
-ATTACK_TYPE = 'sign_flip' 
+# Options: 'none', 'sign_flip', 'additive_noise', 'pure_additive_noise', 'catastrophic_noise', 'label_flip', 'orthogonal', 'volume_spam', 'sybil', 'alie', 'ipm'
+ATTACK_TYPE = 'label_flip'
 ATTACK_PROBABILITY = 1.0            # Probability of a traitor attacking whilst in their window
 ATTACK_NOISE_STD = 2.0              # Multiplier for additive_noise magnitudes
 NUM_SYBILS_PER_ATTACKER = 3         # Fake identities per traitor during a Sybil attack
 
 # ALIE Specifics ("A Little Is Enough")
 ALIE_Z = 1.0                        # Set to None for algorithmic paper formula.
-ALIE_USE_OMNISCIENT = False         # True = use all gradients, False = only traitor gradients
+ALIE_USE_OMNISCIENT = True         # True = use all gradients, False = only traitor gradients
 
-# Attack Window Timeline
-# If PERSISTENT_ATTACK_WINDOW = True, ALL traitors attack from round 0 to NUM_ROUNDS.
-# This guarantees identical, full-run attack pressure across ALL ablation experiments.
-# Set to False to use the random Beta-distributed start/end schedule below.
-PERSISTENT_ATTACK_WINDOW = False     # Recommended: True for Ablation, False for standard runs
-
-ATTACK_WINDOW_MIN_DURATION = 10     # Minimum active attack window length (used only if PERSISTENT=False)
-ATTACK_WINDOW_MAX_DURATION = 200    # Maximum active attack window length (used only if PERSISTENT=False)
-EXPECTED_CONVERGENCE_ROUNDS = 400   # Used to calculate the deadline (used only if PERSISTENT=False)
-ATTACK_DEADLINE_PERCENT = 0.50      # Attacks must start prior to this % of convergence (used only if PERSISTENT=False)
-ATTACK_DEADLINE_ROUND = int(EXPECTED_CONVERGENCE_ROUNDS * ATTACK_DEADLINE_PERCENT)
+# IPM Specifics ("Fall of Empires" — Xie, Koyejo, Gupta, UAI 2020)
+# ε controls the stealth-vs-impact tradeoff:
+#   ε = 1.0  → poisoned delta = -1.0 × μ̂ (full negation, cos ≈ -1, easily caught by cosine filter)
+#   ε = 0.5  → poisoned delta = -0.5 × μ̂ (half magnitude, cos ≈ -1, still caught but smaller norm)
+#   ε = 0.1  → poisoned delta = -0.1 × μ̂ (very small norm, cos ≈ -1, tiny per-round impact)
+#   ε = 0.01 → poisoned delta = -0.01 × μ̂ (near-zero norm, direction ambiguous, ALIE-like stealth)
+IPM_EPSILON = 1.0                   # Scaling factor τ: each Byzantine submits -τ × μ. ByzFL reference default: 2.0.
+IPM_USE_OMNISCIENT = True           # True = compute μ over ALL clients' deltas; False = Byzantine clients' own deltas only
 
 # --- === 9. Environment & System Limits === ---
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,12 +86,18 @@ DATALOADER_WORKERS = 0              # MUST stay 0 if Multiprocessing clients > 0
 # --- === 10. Evaluation & Early Stopping === ---
 EVALUATE_EVERY_N_ROUNDS = 1
 EARLY_STOPPING_ENABLED = True
-PATIENCE = 50                       # Wait time for loss improvement (20 evals × 5 rounds = 100 real rounds)
+PATIENCE = 100                       # Wait time for loss improvement 
 MIN_DELTA = 0.001                   # Substantial enough loss drop to reset patience
 
 # --- === 11. Output, Visualization & System === ---
-# RESULTS_DIR = './saved_models'      # './saved_models' for Modal, 'C:/...' for local
-RESULTS_DIR = 'D:\IITD\MTP 2\Results'      # './saved_models' for Modal, 'C:/...' for 
+#RESULTS_DIR = './saved_models'      # './saved_models' for Modal, 'C:/...' for local
+#RESULTS_DIR = 'D:\IITD\MTP 2\Results'      # './saved_models' for Modal, 'C:/...' for 
+# Use a relative path (works on both your Windows PC and Kaggle Linux)
+#RESULTS_DIR = '/kaggle/working/saved_models'
+RESULTS_DIR = './results'       #For lab server
+
+
 VISUALIZE_GRADIENTS = False         # Master toggle for distance scatters
 VISUALIZE_EVERY_N_ROUNDS = 10       
+PLOT_SMOOTHING_WEIGHT = 0.85        # Exponential Moving Average weight (0.0 to 1.0)
 AUTO_SHUTDOWN = False               # Automatically turn off machine post-run
