@@ -582,14 +582,12 @@ def plot_aegis_diagnostics(result, config_module):
     n_vals = participant_counts[:n] # Total selection per round
 
     # Calculate FP Rate (%) = FP / (Total Selected - Total Byzantine)
-    # Calculate FN Rate (%) = FN / (Total Byzantine)
+    # Note: Total Byzantine = TP + FN
     fp_rate_vals = []
-    fn_rate_vals = []
     for i in range(n):
         num_byzantine = tp_vals[i] + fn_vals[i]
         num_honest = max(n_vals[i] - num_byzantine, 1) # Prevent div by zero
         fp_rate_vals.append((fp_vals[i] / num_honest) * 100)
-        fn_rate_vals.append((fn_vals[i] / max(num_byzantine, 1)) * 100)
     
     # Detection rate and precision may have different lengths
     dr_vals = detection_rate[:n] if len(detection_rate) >= n else detection_rate
@@ -665,14 +663,14 @@ def plot_aegis_diagnostics(result, config_module):
     ax3.grid(True, alpha=0.3)
     ax3.set_ylim(0, 105) # Rate is a percentage
 
-    # ------ Panel 4: False Negatives Rate------
+    # ------ Panel 4: False Negatives ------
     ax4 = axes[1, 1]
-    ax4.plot(rounds_diag, ema_smooth(fn_rate_vals, 0.9), color=c_orange, linewidth=2.0, label='FN Rate (EMA)')
-    ax4.set_ylabel('Percentage (%)', fontsize=11)
-    ax4.set_title('False Negative Rate (Attackers Missed)', fontsize=12)
+    ax4.plot(rounds_diag, ema_smooth(fn_vals, 0.9), color=c_orange, linewidth=2.0, label='FN (EMA)')
+    ax4.set_ylabel('Count', fontsize=11)
+    ax4.set_title('False Negatives (Attackers Missed)', fontsize=12)
     ax4.legend(loc='upper right', fontsize=9)
     ax4.grid(True, alpha=0.3)
-    ax4.set_ylim(0, 105) # Rate is a percentage
+    ax4.set_ylim(bottom=0)
 
     # ------ Panel 5: Approval Rate ------
     ax5 = axes[2, 0]
@@ -725,12 +723,12 @@ def plot_aegis_diagnostics(result, config_module):
     print(f"  > Diagnostic dashboard saved to: {save_path}")
     
     # --- Print summary statistics ---
-    avg_fp = np.mean(fp_rate_vals) if len(fp_rate_vals) > 0 else 0
-    avg_fn = np.mean(fn_rate_vals) if len(fn_rate_vals) > 0 else 0
+    avg_fp = np.mean(fp_vals) if len(fp_vals) > 0 else 0
+    avg_fn = np.mean(fn_vals) if len(fn_vals) > 0 else 0
     avg_ar = np.mean(ar_vals) if len(ar_vals) > 0 else 0
     avg_k = np.nanmean([v for v in k_clean if not np.isnan(v)]) if len(k_clean) > 0 else 0
     
-    print(f"  > [Summary] Avg FP Rate: {avg_fp:.1f}% | Avg FN Rate: {avg_fn:.1f}% | "
+    print(f"  > [Summary] Avg FP/round: {avg_fp:.1f} | Avg FN/round: {avg_fn:.1f} | "
           f"Avg Approval Rate: {avg_ar:.1f}% | Avg K: {avg_k:.2f}")
     
     return save_path
