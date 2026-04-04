@@ -413,10 +413,13 @@ class Server:
 
             total = num_approved + num_rejected  # Use actual evaluations, not len(selected_clients)
             accuracy = (tp + tn) / total * 100 if total > 0 else 0
-            detection_rate = tp / (tp + fn) * 100 if (tp + fn) > 0 else 0
-            precision = tp / (tp + fp) * 100 if (tp + fp) > 0 else 0
+            # Detection rate & precision are undefined when no attackers are present
+            detection_rate = tp / (tp + fn) * 100 if (tp + fn) > 0 else None
+            precision = tp / (tp + fp) * 100 if (tp + fp) > 0 else None
 
-            print(f"    > [Server Eval] Filter Acc={accuracy:.1f}% | Detection Rate={detection_rate:.1f}% | Precision={precision:.1f}%")
+            dr_str = f"{detection_rate:.1f}%" if detection_rate is not None else "N/A (no attackers)"
+            pr_str = f"{precision:.1f}%" if precision is not None else "N/A (no attackers)"
+            print(f"    > [Server Eval] Filter Acc={accuracy:.1f}% | Detection Rate={dr_str} | Precision={pr_str}")
             print(f"    > [Server Eval] TP={tp} | FP={fp} {sorted(rejected_set - byz_set)} | FN={fn} {sorted(approved_set & byz_set)}")
 
         # --- Step 6: Learning Rate Decay ---

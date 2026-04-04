@@ -16,7 +16,9 @@ RANDOM_SEED = 42             # Fixed seed for reproducibility control
 # --- === 2. Experiment Toggles === ---
 # Only ONE of the following should be set to True (or both False for manual experiments).
 COMPARE_AEGIS_SCENARIOS = False    # Set True to run "Aegis vs Baselines" comparison
-RUN_ABLATION_STUDY = True         # Set True to run Aegis Ablation Study across components
+RUN_ABLATION_STUDY = False         # Set True to run Aegis Ablation Study across components
+ABLATION_NON_IID_SWEEP = True     # Set True to sweep over non-IID shards_per_client (2, 4, 6, 10)
+ABLATION_BYZANTINE_SWEEP = False    # Set True to sweep over fraction of attackers (10%, 20%, 30%, 40%)
 
 # --- === 3. Data & Model Parameters === ---
 MODEL_TYPE = 'ImprovedCNN'  # 'MLP' (MNIST), 'CNN' (LeNet-5), 'ImprovedCNN' (CIFAR10)
@@ -77,7 +79,7 @@ NUM_SYBILS_PER_ATTACKER = 2         # Fake identities per traitor during a Sybil
 
 # ALIE Specifics ("A Little Is Enough")
 ALIE_Z = 1.0                        # Set to None for algorithmic paper formula.
-ALIE_USE_OMNISCIENT = False         # True = use all gradients, False = only traitor gradients
+ALIE_USE_OMNISCIENT = True         # True = use all gradients, False = only traitor gradients
 
 # IPM Specifics ("Fall of Empires" — Xie, Koyejo, Gupta, UAI 2020)
 # ε controls the stealth-vs-impact tradeoff:

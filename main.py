@@ -493,6 +493,60 @@ elif config.RUN_ABLATION_STUDY:
             'marker': 'v'
         }
     ]
+elif getattr(config, 'ABLATION_NON_IID_SWEEP', False):
+    EXPERIMENT_CONFIGS = []
+    SHARDS = [2, 4, 6, 10]
+    SHARD_COLORS = {2: '#e74c3c', 4: '#e67e22', 6: '#3498db', 10: '#2ecc71'}
+
+    for s in SHARDS:
+        EXPERIMENT_CONFIGS.append({
+            'run': True,
+            'label': f"Aegis ({s}-shard - label_flip)",
+            'aggregator': aegis,
+            'data_split': 'NON_IID',
+            'attack_type': 'label_flip',
+            'fraction_byzantine': 0.30,
+            'shards_per_client': s,
+            'color': SHARD_COLORS[s],
+        })
+        EXPERIMENT_CONFIGS.append({
+            'run': True,
+            'label': f"Aegis ({s}-shard - no attack)",
+            'aggregator': aegis,
+            'data_split': 'NON_IID',
+            'attack_type': 'none',
+            'fraction_byzantine': 0.0,
+            'shards_per_client': s,
+            'color': SHARD_COLORS[s],
+        })
+elif getattr(config, 'ABLATION_BYZANTINE_SWEEP', False):
+    EXPERIMENT_CONFIGS = []
+    
+    # 1. Honest Baseline
+    EXPERIMENT_CONFIGS.append({
+        'run': True,
+        'label': f"Aegis (0% Byzantine - Baseline)",
+        'aggregator': aegis,
+        'data_split': config.DATA_SPLIT_TYPE,
+        'attack_type': 'none',
+        'fraction_byzantine': 0.0,
+        'color': '#3498db',
+    })
+    
+    # 2. Attack Sweeps
+    FRACTIONS = [0.10, 0.20, 0.30, 0.40]
+    FRACTION_COLORS = {0.10: '#2ecc71', 0.20: '#f1c40f', 0.30: '#e67e22', 0.40: '#e74c3c'}
+    
+    for f in FRACTIONS:
+        EXPERIMENT_CONFIGS.append({
+            'run': True,
+            'label': f"Aegis ({int(f*100)}% Byzantine - {config.ATTACK_TYPE})",
+            'aggregator': aegis,
+            'data_split': config.DATA_SPLIT_TYPE,
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': f,
+            'color': FRACTION_COLORS[f],
+        })
 
 # --- === 2. SIMULATION RUNNER === ---
 
@@ -510,6 +564,15 @@ def run_simulation(exp_config):
     
     print(f"\n\n------------------------------- Starting Experiment: {exp_config['label']} -------------------------------")
     exp_start_time = time.time()
+    
+    # Store original values to restore later
+    original_shards = config.SHARDS_PER_CLIENT
+    original_fraction = config.FRACTION_BYZANTINE
+    
+    if 'shards_per_client' in exp_config:
+        config.SHARDS_PER_CLIENT = exp_config['shards_per_client']
+    if 'fraction_byzantine' in exp_config:
+        config.FRACTION_BYZANTINE = exp_config['fraction_byzantine']
     
     # --- Fix Random Seed for Reproducibility ---
     # Ensures every experiment comparing the same data split gets EXACTLY the same client shards and Byzantines
@@ -687,6 +750,10 @@ def run_simulation(exp_config):
     if accuracy_history and loss_history:
         print(f"  > Best Model Tracker —  Accuracy: {best_accuracy:.2f}%  |  Loss: {best_loss:.4f}")
     
+    # Restore original config values
+    config.SHARDS_PER_CLIENT = original_shards
+    config.FRACTION_BYZANTINE = original_fraction
+    
     print(f"\n  > --- Profiling Summary ---")
     
     # Calculate "Other" time
@@ -761,6 +828,10 @@ def main():
     # Build a descriptive prefix based on the active run mode
     if config.RUN_ABLATION_STUDY:
         run_mode = "ablation"
+    elif getattr(config, 'ABLATION_NON_IID_SWEEP', False):
+        run_mode = "shards_sweep"
+    elif getattr(config, 'ABLATION_BYZANTINE_SWEEP', False):
+        run_mode = f"byz_sweep_{config.ATTACK_TYPE}"
     elif config.COMPARE_AEGIS_SCENARIOS:
         run_mode = "comparison"
     else:
@@ -815,11 +886,11 @@ def main():
             print(f"\n\n{'='*90}")
             print(f"  EXPERIMENT SUMMARY ({len(all_results)} run(s) completed)")
             print(f"{'='*90}")
-            print(f"    {'Experiment':<{col_label}} | {'Aggregator':<{col_agg}} | {'Attack':<{col_atk}} | {'Final Acc (%)':<{col_acc}} | {'Final Loss':<{col_loss}}")
+            print(f"    {'Experiment':<{col_label}} | {'Aggregator':<{col_agg}} | {'Attack':<{col_atk}} | {'Best Acc (%)':<{col_acc}} | {'Best Loss':<{col_loss}}")
             print(sep)
             for r in all_results:
-                final_acc  = f"{r['history'][-1]:.2f}"  if r['history']  else 'N/A'
-                final_loss = f"{r['loss_history'][-1]:.4f}" if r['loss_history'] else 'N/A'
+                final_acc  = f"{r['best_accuracy']:.2f}"  if r.get('best_accuracy')  else 'N/A'
+                final_loss = f"{r['best_loss']:.4f}" if r.get('best_loss') else 'N/A'
                 print(f"    {r['label']:<{col_label}} | {r.get('aggregator_name','?'):<{col_agg}} | {r.get('attack_type','?'):<{col_atk}} | {final_acc:<{col_acc}} | {final_loss:<{col_loss}}")
             print(sep)
             print(f"{'='*90}")

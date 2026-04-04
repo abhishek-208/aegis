@@ -665,14 +665,19 @@ def plot_aegis_diagnostics(result, config_module):
     ax3.grid(True, alpha=0.3)
     ax3.set_ylim(0, 105) # Rate is a percentage
 
-    # ------ Panel 4: False Negatives Rate------
+    # ------ Panel 4: False Negative Rate ------
     ax4 = axes[1, 1]
-    ax4.plot(rounds_diag, ema_smooth(fn_rate_vals, 0.9), color=c_orange, linewidth=2.0, label='FN Rate (EMA)')
+    has_attackers = any((tp_vals[i] + fn_vals[i]) > 0 for i in range(n))
+    if has_attackers:
+        ax4.plot(rounds_diag, ema_smooth(fn_rate_vals, 0.9), color=c_orange, linewidth=2.0, label='FN Rate (EMA)')
+        ax4.legend(loc='upper right', fontsize=9)
+    else:
+        ax4.text(0.5, 0.5, 'N/A — No Attackers', transform=ax4.transAxes,
+                 ha='center', va='center', fontsize=14, color='grey', fontstyle='italic')
     ax4.set_ylabel('Percentage (%)', fontsize=11)
     ax4.set_title('False Negative Rate (Attackers Missed)', fontsize=12)
-    ax4.legend(loc='upper right', fontsize=9)
     ax4.grid(True, alpha=0.3)
-    ax4.set_ylim(0, 105) # Rate is a percentage
+    ax4.set_ylim(0, 105)
 
     # ------ Panel 5: Approval Rate ------
     ax5 = axes[2, 0]
@@ -687,14 +692,18 @@ def plot_aegis_diagnostics(result, config_module):
 
     # ------ Panel 6: Detection Rate & Precision ------
     ax6 = axes[2, 1]
-    if len(dr_vals) > 0:
+    if len(dr_vals) > 0 and has_attackers:
         ax6.plot(rounds_dr, ema_smooth(dr_vals, 0.9), color=c_accent, linewidth=2.0, label='Detection Rate (EMA)')
-    if len(pr_vals) > 0:
+    if len(pr_vals) > 0 and has_attackers:
         ax6.plot(rounds_dr[:len(pr_vals)], ema_smooth(pr_vals, 0.9), color=c_info, linewidth=2.0, label='Precision (EMA)')
+    if not has_attackers:
+        ax6.text(0.5, 0.5, 'N/A — No Attackers', transform=ax6.transAxes,
+                 ha='center', va='center', fontsize=14, color='grey', fontstyle='italic')
+    else:
+        ax6.legend(loc='lower right', fontsize=9)
     ax6.set_ylabel('Percentage (%)', fontsize=11)
     ax6.set_xlabel('Communication Round', fontsize=11)
     ax6.set_title('Detection Rate & Precision', fontsize=12)
-    ax6.legend(loc='lower right', fontsize=9)
     ax6.grid(True, alpha=0.3)
     ax6.set_ylim(0, 105)
 
@@ -729,8 +738,9 @@ def plot_aegis_diagnostics(result, config_module):
     avg_fn = np.mean(fn_rate_vals) if len(fn_rate_vals) > 0 else 0
     avg_ar = np.mean(ar_vals) if len(ar_vals) > 0 else 0
     avg_k = np.nanmean([v for v in k_clean if not np.isnan(v)]) if len(k_clean) > 0 else 0
+    fn_str = f"{avg_fn:.1f}%" if has_attackers else "N/A"
     
-    print(f"  > [Summary] Avg FP Rate: {avg_fp:.1f}% | Avg FN Rate: {avg_fn:.1f}% | "
+    print(f"  > [Summary] Avg FP Rate: {avg_fp:.1f}% | Avg FN Rate: {fn_str} | "
           f"Avg Approval Rate: {avg_ar:.1f}% | Avg K: {avg_k:.2f}")
     
     return save_path
