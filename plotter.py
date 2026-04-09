@@ -169,12 +169,12 @@ def plot_results(all_results, config_module):
             label=plot_label,
             color=result['color'],
             marker=None,
-            linestyle='solid',
+            linestyle=result.get('linestyle', 'solid'),
             linewidth=2.5,
         )
     
     
-    ax_acc.legend(loc='lower right', fontsize=10, ncol=1, framealpha=0.9)
+    ax_acc.legend(loc='lower right', fontsize=14, ncol=1, framealpha=0.9, borderpad=1.2, labelspacing=1.2)
     _add_participant_bars(ax_acc, all_results)
     
     # --- Adaptive K Plot (Twin Axis) ---
@@ -213,7 +213,7 @@ def plot_results(all_results, config_module):
         k_line_proxy = plt.Line2D([0], [0], color='black', linewidth=1.0, label='Adaptive Threshold (k)')
         handles, labels = ax_acc.get_legend_handles_labels()
         handles.append(k_line_proxy)
-        ax_acc.legend(handles=handles, loc='lower right', fontsize=10, ncol=1, framealpha=0.9)
+        ax_acc.legend(handles=handles, loc='lower right', fontsize=14, ncol=1, framealpha=0.9, borderpad=1.2, labelspacing=1.2)
 
 
     # Parameter text boxes removed as requested
@@ -248,11 +248,11 @@ def plot_results(all_results, config_module):
             label=plot_label,
             color=result['color'],
             marker=None,
-            linestyle='solid',
+            linestyle=result.get('linestyle', 'solid'),
             linewidth=2.5,
         )
     
-    ax_loss.legend(loc='upper right', fontsize=10, ncol=1, framealpha=0.9)
+    ax_loss.legend(loc='upper right', fontsize=14, ncol=1, framealpha=0.9, borderpad=1.2, labelspacing=1.2)
     _add_participant_bars(ax_loss, all_results)
     # Parameter text boxes removed as requested
 
@@ -310,9 +310,13 @@ def plot_results(all_results, config_module):
             f.write(f"  Best Loss: {final_loss:.4f}\n")
             f.write(f"  Duration: {dur:.1f}s\n")
             if res.get('avg_filter_acc') is not None:
+                dr_val = res.get('avg_detection_rate')
+                pr_val = res.get('avg_precision')
+                dr_str = f"{dr_val:.1f}%" if dr_val is not None else "N/A"
+                pr_str = f"{pr_val:.1f}%" if pr_val is not None else "N/A"
                 f.write(f"  Avg Aegis Filter Accuracy: {res['avg_filter_acc']:.1f}%\n")
-                f.write(f"  Avg Aegis Detection: {res['avg_detection_rate']:.1f}%\n")
-                f.write(f"  Avg Aegis Precision: {res['avg_precision']:.1f}%\n")
+                f.write(f"  Avg Aegis Detection: {dr_str}\n")
+                f.write(f"  Avg Aegis Precision: {pr_str}\n")
                 
     print(f"  > Summary text saved to {summary_path}")
     
@@ -355,13 +359,13 @@ def plot_final_summary_bars(all_results, config_module):
     
     # Title removed as requested
     
-    ax_acc.set_ylabel('Best Accuracy (%)', fontsize=12)
+    ax_acc.set_ylabel('Best Accuracy (%)', fontsize=14)
     ax_acc.set_ylim(bottom=0, top=max(final_accuracies) * 1.15)
     
-    ax_acc.set_xticklabels(labels, rotation=15, ha='right', fontsize=10)
+    ax_acc.set_xticklabels(labels, rotation=15, ha='right', fontsize=12)
     
     for i, acc in enumerate(final_accuracies):
-        ax_acc.text(i, acc + 0.5, f"{acc:.2f}%", ha='center', fontweight='bold')
+        ax_acc.text(i, acc + 0.5, f"{acc:.2f}%", ha='center', fontsize=14, fontweight='bold')
         
     # --- === 2. FINAL LOSS BAR CHART === ---
     fig_loss, ax_loss = plt.subplots(figsize=(12, 8))
@@ -371,17 +375,17 @@ def plot_final_summary_bars(all_results, config_module):
     
     # Title removed as requested
     
-    ax_loss.set_ylabel('Best Loss', fontsize=12)
+    ax_loss.set_ylabel('Best Loss', fontsize=14)
     
     # Linear scale limits
     if final_losses:
         ax_loss.set_ylim(bottom=0, top=max(final_losses) * 1.15)
     
-    ax_loss.set_xticklabels(labels, rotation=15, ha='right', fontsize=10)
+    ax_loss.set_xticklabels(labels, rotation=15, ha='right', fontsize=12)
     
     for i, loss in enumerate(final_losses):
         # Place text inside the bar, near the top
-        ax_loss.text(i, loss * 0.85, f"{loss:.4f}", ha='center', va='top', fontweight='bold')
+        ax_loss.text(i, loss * 0.85, f"{loss:.4f}", ha='center', va='top', fontsize=14, fontweight='bold')
 
     # --- === 3. SAVE AND SHOW === ---
     os.makedirs(config_module.RESULTS_DIR, exist_ok=True)
@@ -470,7 +474,7 @@ def plot_gradient_scatter(viz_data, round_num, config_module, exp_label):
         Line2D([0], [0], marker='o', color='gray', label='Accepted (Aggregator)', markersize=10, linestyle='None'),
         Line2D([0], [0], marker='x', color='gray', label='Rejected (Aggregator)', markersize=10, linestyle='None'),
     ]
-    ax.legend(handles=legend_elements, loc='upper right')
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=12, borderpad=1.0, labelspacing=1.0)
 
     ax.set_title(f"Gradient Projection (PCA) - Round {round_num}\nExperiment: {exp_label}")
     ax.set_xlabel("Principal Component 1")
@@ -631,7 +635,7 @@ def plot_aegis_diagnostics(result, config_module):
         ax1.plot(rounds_acc, ema_smooth(accuracy, smoothing), color=c_accent, linewidth=2.0, label='Accuracy (EMA)')
     ax1.set_ylabel('Accuracy (%)', fontsize=11)
     ax1.set_title('Model Accuracy', fontsize=12)
-    ax1.legend(loc='lower right', fontsize=9)
+    ax1.legend(loc='lower right', fontsize=12, borderpad=1.0, labelspacing=1.0)
     ax1.grid(True, alpha=0.3)
     ax1.set_ylim(bottom=0)
 
@@ -653,7 +657,7 @@ def plot_aegis_diagnostics(result, config_module):
     
     ax2.set_ylabel('K Value', fontsize=11)
     ax2.set_title('Adaptive Threshold (K)', fontsize=12)
-    ax2.legend(loc='upper right', fontsize=8)
+    ax2.legend(loc='upper right', fontsize=12, borderpad=1.0, labelspacing=1.0)
     ax2.grid(True, alpha=0.3)
 
     # ------ Panel 3: False Positive Rate ------
@@ -661,7 +665,7 @@ def plot_aegis_diagnostics(result, config_module):
     ax3.plot(rounds_diag, ema_smooth(fp_rate_vals, 0.9), color=c_warn, linewidth=2.0, label='FP Rate (EMA)')
     ax3.set_ylabel('Percentage (%)', fontsize=11)
     ax3.set_title('False Positive Rate (Honest Clients Rejected)', fontsize=12)
-    ax3.legend(loc='upper right', fontsize=9)
+    ax3.legend(loc='upper right', fontsize=12, borderpad=1.0, labelspacing=1.0)
     ax3.grid(True, alpha=0.3)
     ax3.set_ylim(0, 105) # Rate is a percentage
 
@@ -670,7 +674,7 @@ def plot_aegis_diagnostics(result, config_module):
     has_attackers = any((tp_vals[i] + fn_vals[i]) > 0 for i in range(n))
     if has_attackers:
         ax4.plot(rounds_diag, ema_smooth(fn_rate_vals, 0.9), color=c_orange, linewidth=2.0, label='FN Rate (EMA)')
-        ax4.legend(loc='upper right', fontsize=9)
+        ax4.legend(loc='upper right', fontsize=12, borderpad=1.0, labelspacing=1.0)
     else:
         ax4.text(0.5, 0.5, 'N/A — No Attackers', transform=ax4.transAxes,
                  ha='center', va='center', fontsize=14, color='grey', fontstyle='italic')
@@ -686,7 +690,7 @@ def plot_aegis_diagnostics(result, config_module):
     ax5.set_ylabel('Approval Rate (%)', fontsize=11)
     ax5.set_xlabel('Communication Round', fontsize=11)
     ax5.set_title('Client Approval Rate', fontsize=12)
-    ax5.legend(loc='lower right', fontsize=9)
+    ax5.legend(loc='lower right', fontsize=12, borderpad=1.0, labelspacing=1.0)
     ax5.grid(True, alpha=0.3)
     ax5.set_ylim(0, 105)
 
@@ -700,7 +704,7 @@ def plot_aegis_diagnostics(result, config_module):
         ax6.text(0.5, 0.5, 'N/A — No Attackers', transform=ax6.transAxes,
                  ha='center', va='center', fontsize=14, color='grey', fontstyle='italic')
     else:
-        ax6.legend(loc='lower right', fontsize=9)
+        ax6.legend(loc='lower right', fontsize=12, borderpad=1.0, labelspacing=1.0)
     ax6.set_ylabel('Percentage (%)', fontsize=11)
     ax6.set_xlabel('Communication Round', fontsize=11)
     ax6.set_title('Detection Rate & Precision', fontsize=12)
@@ -744,3 +748,60 @@ def plot_aegis_diagnostics(result, config_module):
           f"Avg Approval Rate: {avg_ar:.1f}% | Avg K: {avg_k:.2f}")
     
     return save_path
+
+def plot_complexity_verification(result, config_module):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    participants = result.get('participant_counts', [])
+    agg_times = result.get('agg_time_history', [])
+    
+    if not participants or not agg_times:
+        print("No timing data available.")
+        return
+    
+    participants = np.array(participants)
+    agg_times = np.array(agg_times) * 1000  # Convert to milliseconds
+    
+    # Bin by participant count and compute mean time per bin
+    unique_k = np.unique(participants)
+    mean_times = []
+    for k in unique_k:
+        mask = participants == k
+        mean_times.append(np.mean(agg_times[mask]))
+    
+    fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+    ax.scatter(unique_k, mean_times, color='#3498db', s=60, zorder=3)
+    
+    # Linear fit
+    coeffs = np.polyfit(unique_k, mean_times, 1)
+    fit_line = np.poly1d(coeffs)
+    
+    # Calculate R-squared to measure goodness of fit
+    if len(unique_k) > 1:
+        y_pred = fit_line(unique_k)
+        ss_res = np.sum((mean_times - y_pred)**2)
+        ss_tot = np.sum((mean_times - np.mean(mean_times))**2)
+        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 1.0
+    else:
+        r_squared = 1.0 # Cannot compute R^2 with only one point, assume perfect fit for a single point
+        
+    x_fit = np.linspace(min(unique_k), max(unique_k), 100)
+    ax.plot(x_fit, fit_line(x_fit), '--', color='#e74c3c', 
+            label=f'Linear fit: {coeffs[0]:.2f}k + {coeffs[1]:.2f} (R² = {r_squared:.4f})')
+    
+    ax.set_xlabel('Number of Clients (k)', fontsize=12)
+    ax.set_ylabel('Aggregation Time (ms)', fontsize=12)
+    ax.set_title('AEGIS Aggregation Time vs Client Count', fontsize=13)
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    os.makedirs(config_module.RESULTS_DIR, exist_ok=True)
+    label = result.get('label', 'Unknown')
+    safe_label = "".join(c for c in label if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+    save_path = os.path.join(config_module.RESULTS_DIR, f'complexity_verification_{safe_label}.png')
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=200)
+    plt.close()
+    print(f"  > Complexity verification plot saved to: {save_path}")

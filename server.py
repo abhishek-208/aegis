@@ -90,7 +90,7 @@ class Server:
         
         # Always print round info
         attacker_ids_str = sorted(list(byzantine_client_set))
-        print(f"    > Round Info: {len(selected_clients)} Participants, {num_byzantine} Active Attackers {attacker_ids_str} ({attack_type})")
+        print(f"    > Round Selection: {len(selected_clients)} Real Clients ({num_byzantine} Traitors: {attacker_ids_str})")
 
         # --- Step 3: Local Training ---
         t_start_train = time.time()
@@ -129,10 +129,7 @@ class Server:
         print(f"    > Training Time: {t_end_train - t_start_train:.2f}s")
         
         # --- SYBIL CLONE INJECTION ---
-        # True Sybil attack: each real Byzantine client already trained with label-flipped data
-        # (producing plausible-looking but poisoned updates). Now we duplicate each attacker's
-        # update into NUM_SYBILS_PER_ATTACKER clones with deterministic fake IDs.
-        # The aggregator receives the inflated list and processes it blindly.
+        all_participating_ids = [c.client_id for c in selected_clients]
         num_sybil_clones = 0
         if attack_type == 'sybil' and len(byzantine_client_set) > 0:
             import copy
@@ -147,6 +144,7 @@ class Server:
                         fake_id = 100 + (c_id * 10) + clone_idx
                         sybil_clones.append((fake_id, copy.deepcopy(w), n_samp))
                         byzantine_client_set.add(fake_id)  # Track clones as malicious for FP/FN diagnostics
+                        all_participating_ids.append(fake_id) # Ensure clones appear on the PCA scatter plot
             
             updates.extend(sybil_clones)
             num_sybil_clones = len(sybil_clones)
@@ -327,7 +325,7 @@ class Server:
                     viz_data = {
                         "coords": coords,
                         "approved_indices": agg_stats['approved_indices'],
-                        "original_indices": [c.client_id for c in selected_clients],
+                        "original_indices": all_participating_ids, # FIXED: Now Includes Sybil IDs
                         "byzantine_set": list(byzantine_client_set)
                     }
                 else:
@@ -418,7 +416,7 @@ class Server:
             precision = tp / (tp + fp) * 100 if (tp + fp) > 0 else None
 
             dr_str = f"{detection_rate:.1f}%" if detection_rate is not None else "N/A (no attackers)"
-            pr_str = f"{precision:.1f}%" if precision is not None else "N/A (no attackers)"
+            pr_str = f"{precision:.1f}%" if precision is not None else "N/A (no rejections)"
             print(f"    > [Server Eval] Filter Acc={accuracy:.1f}% | Detection Rate={dr_str} | Precision={pr_str}")
             print(f"    > [Server Eval] TP={tp} | FP={fp} {sorted(rejected_set - byz_set)} | FN={fn} {sorted(approved_set & byz_set)}")
 
@@ -430,17 +428,19 @@ class Server:
             "train_time": t_end_train - t_start_train,
             "agg_time": t_end_agg - t_start_agg,
             "viz_data": viz_data,
-            "num_byzantine": num_byzantine,
-            "num_selected": len(selected_clients),
+            # Return detailed counts for intensity calculation in main.py
+            "num_byzantine_real": num_byzantine,
+            "num_byzantine_total": num_byzantine + num_sybil_clones,
+            "num_selected_real": len(selected_clients),
+            "num_selected_total": len(selected_clients) + num_sybil_clones,
             "adaptive_k": adaptive_k,
-            # Raw diagnostic counts (new)
+            # Raw diagnostic counts (remain relative to total updates seen)
             "tp": tp,
             "fp": fp,
             "fn": fn,
             "tn": tn,
             "num_approved": num_approved,
             "num_rejected": num_rejected,
-            # Percentages
             "accuracy": accuracy,
             "detection_rate": detection_rate,
             "precision": precision,

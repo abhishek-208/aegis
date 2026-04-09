@@ -1,0 +1,336 @@
+user2@10.228.64.157 
+misn2@USR45
+
+
+ssh user2@10.228.64.157
+./proxy.sh &
+source ~/flenv/bin/activate
+cd ~/FL_Project_lab_server
+rm -rf results/*
+
+nohup python main.py > logs/run.log 2>&1 &
+ps aux | grep main.py
+tail -f logs/run.log
+tail -n 50 logs/run.log
+scp -r user2@10.228.64.157:~/FL_Project_lab_server/results "D:\IITD\MTP 2\Results\lab"
+scp user2@10.228.64.157:~/FL_Project_lab_server/logs/run.log "D:\IITD\MTP 2\Results\lab"
+
+scp -r "D:\IITD\MTP 2\FL_Project_lab_server" user2@10.228.64.157:~
+
+scp user2@10.228.64.157:~/FL_Project_lab_server/logs/run.log "D:\IITD\MTP 2\Results"
+free -h
+top
+
+
+
+
+
+
+
+
+---
+
+# 🧭 PART 1 — ON YOUR LAPTOP (Windows)
+
+## STEP 1 — Open PowerShell
+
+* Press **Start**
+* Type: `PowerShell`
+* Open it
+
+👉 This is your control terminal (NOT the server)
+
+---
+
+## STEP 2 — Connect to server
+
+```powershell
+ssh user2@10.228.64.157
+```
+
+👉 Enter password
+
+Now you are inside server. Prompt looks like:
+
+```bash
+user2@user:~$
+```
+
+---
+
+# 🧭 PART 2 — SETUP SERVER ENVIRONMENT
+
+## STEP 3 — Go to home directory
+
+```bash
+cd ~
+```
+
+👉 Ensures correct location
+
+---
+
+## STEP 4 — Start proxy (MANDATORY every login)
+
+```bash
+./proxy.sh
+```
+If login fails
+pkill -f proxy.sh
+
+👉 Wait until you see:
+
+```text
+Proxy login successful!
+```
+
+---
+
+## STEP 5 — Stop it (foreground run only for verification)
+
+Press:
+
+```text
+Ctrl + C
+```
+
+---
+
+## STEP 6 — Run proxy in background
+
+```bash
+./proxy.sh &
+```
+
+---
+
+## STEP 7 — Set proxy variables
+
+```bash
+export http_proxy="http://proxy62.iitd.ac.in:3128"
+export https_proxy="http://proxy62.iitd.ac.in:3128"
+export HTTP_PROXY="http://proxy62.iitd.ac.in:3128"
+export HTTPS_PROXY="http://proxy62.iitd.ac.in:3128"
+```
+
+---
+
+## STEP 8 — Verify internet
+
+```bash
+wget www.google.com
+rm index.html*
+```
+
+👉 If this works → internet OK
+
+---
+
+# 🧭 PART 3 — ACTIVATE YOUR ENVIRONMENT
+
+## STEP 9 — Activate virtual environment
+
+```bash
+source ~/flenv/bin/activate
+```
+
+👉 Prompt becomes:
+
+```bash
+(flenv) user2@user:~$
+```
+
+---
+
+## STEP 10 — Verify GPU (optional but good)
+
+```bash
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+👉 Should print `True`
+
+---
+
+# 🧭 PART 4 — GO TO YOUR PROJECT
+
+## STEP 11 — Enter project folder
+
+```bash
+cd ~/FL_Project_lab_server
+```
+
+---
+
+## STEP 12 — Check files
+
+```bash
+ls
+```
+
+👉 You must see:
+
+```bash
+main.py
+config.py
+server.py
+...
+```
+
+---
+
+# 🧭 PART 5 — RUN YOUR CODE
+
+## STEP 13 — Create folders (only once)
+
+```bash
+mkdir -p logs results
+```
+
+---
+
+## STEP 14 — Run in background (IMPORTANT)
+
+```bash
+nohup python main.py > logs/run.log 2>&1 &
+```
+
+👉 You will see:
+
+```bash
+[1] 12345
+```
+
+👉 This means job started
+
+---
+
+# 🧭 PART 6 — MONITOR YOUR JOB
+
+## STEP 15 — Check if running
+
+```bash
+ps aux | grep main.py
+```
+
+👉 You should see `python main.py`
+
+---
+
+## STEP 16 — See live logs
+
+```bash
+tail -f logs/run.log
+```
+
+👉 Shows training progress
+
+👉 Exit view:
+
+```text
+Ctrl + C
+```
+
+---
+
+## STEP 17 — Check GPU usage
+
+```bash
+nvidia-smi
+```
+
+# 🧭 PART 7 — LEAVE SAFELY
+
+## STEP 18 — Exit server
+
+```bash
+exit
+```
+
+👉 You can now:
+
+* close laptop
+* disconnect internet
+
+👉 Job keeps running
+
+---
+
+# 🧭 PART 8 — NEXT DAY (CHECK RESULTS)
+
+## STEP 19 — Login again
+
+```powershell
+ssh user2@10.228.64.157
+```
+
+---
+
+## STEP 20 — Go to project
+
+```bash
+cd ~/FL_Project_lab_server
+```
+
+---
+
+## STEP 21 — Check live logs
+
+```bash
+tail -f logs/run.log
+```
+See last few lines
+tail -n 50 logs/run.log
+---
+
+## STEP 22 — Check results
+
+```bash
+ls results
+```
+
+---
+
+# 🧭 PART 9 — COPY RESULTS TO LAPTOP
+
+## STEP 23 — On PowerShell (laptop)
+
+copy from server to laptop
+```powershell
+scp -r user2@10.228.64.157:~/FL_Project_lab_server/results "D:\IITD\MTP 2\Results\lab"
+```
+
+---
+Copy entire folder to server
+scp -r "D:\IITD\MTP 2\FL_Project_lab_server" user2@10.228.64.157:~
+
+👉 This copies full project
+
+---
+
+# 🎯 SIMPLE MEMORY VERSION
+
+Every time:
+
+```bash
+ssh → proxy → activate env → cd project → nohup run → tail logs → exit
+```
+
+---
+
+
+
+To clean the results folder
+rm -rf results/*
+
+To download the log
+scp user2@10.228.64.157:~/FL_Project_lab_server/logs/run.log "D:\IITD\MTP 2\Results"
+
+
+To check the memory usage
+free -h
+
+To check all the process running
+top
+
+

@@ -183,7 +183,7 @@ def aegis(updates, current_round=None,
     num_rejected_pass1 = len(updates) - len(surviving_indices_pass1)
 
     if num_rejected_pass1 > 0:
-        print(f"    > Aegis Pass 1: Removed {num_rejected_pass1} directionally adversarial clients.")
+        print(f"    > Aegis Pass 1: Removed {num_rejected_pass1} directionally adversarial clients from Median calculation.")
 
     # -------- PASS 2: Debiased median from cleaned pool --------
     if len(surviving_indices_pass1) >= 2:
@@ -214,13 +214,13 @@ def aegis(updates, current_round=None,
     median_distance = torch.median(euclidean_distances)
     distance_mad = torch.median(torch.abs(euclidean_distances - median_distance))
 
-    # Compute adaptive k (Strategy A + C) or use fixed value
+    # Compute adaptive k (Strategy A + B) or use fixed value
     if ADAPTIVE_THRESHOLD_ENABLED and current_round is not None and not ablate_adaptive:
         # Strategy A: Round-Based Decay
         progress = min(current_round / WARMUP_ROUNDS, 1.0)
         k_phase = K_MAX - (K_MAX - K_MIN) * progress
 
-        # Strategy C: Variance-Normalized
+        # Strategy B: Variance-Normalized
         coeff_of_variation = distance_mad / (median_distance + RWA_EPSILON)
         k = k_phase * (1.0 + VARIANCE_SENSITIVITY * coeff_of_variation.item())
         k = max(k, K_SAFE_FLOOR)
@@ -231,18 +231,32 @@ def aegis(updates, current_round=None,
 
     rejection_cutoff = median_distance + (k * distance_mad)
 
-    # B. Final dual filter (re-evaluated against the CLEAN median)
+    # B. Final filter (re-evaluated against the CLEAN median)
+    # 
+    # UPGRADE 1: The hard directional gate (cos >= 0) has been removed from
+    # the approval decision. Directional anomalies are now handled entirely
+    # by the soft cosine penalty (α × P_k) in the credit score (Step 5).
+    #
+    # Rationale: Under 4-shard Non-IID, honest clients frequently have
+    # cosine similarity between -0.2 and +0.1 with the median. The hard
+    # gate at cos=0 creates a step function that rejects 20-30% of honest
+    # clients as false positives. The soft penalty instead applies a
+    # continuous suppression: clients with cos=-0.2 get penalty term
+    # α×1.2=36 vs α×0.2=6 for cos=+0.8 — a 6× weight reduction without
+    # total exclusion. Sign-flip attackers (cos≈-1) get penalty term
+    # α×2.0=60, reducing their credit to ~15% of honest clients.
+    #
+    # Pass 1 (median decontamination) is UNCHANGED — it still removes
+    # cos < τ_pass1 clients from the median computation pool. Pass 1
+    # is a median-quality mechanism, not a rejection gate. Clients
+    # removed in Pass 1 are re-scored here and can still be approved.
+    
     if not ablate_euclidean_filter:
         pass_euclidean = euclidean_distances <= rejection_cutoff
     else:
         pass_euclidean = torch.ones_like(euclidean_distances, dtype=torch.bool)
 
-    if not ablate_directional:
-        pass_direction = cos_sim >= 0.0
-    else:
-        pass_direction = torch.ones_like(cos_sim, dtype=torch.bool)
-
-    approved_mask = pass_euclidean & pass_direction
+    approved_mask = pass_euclidean  # Only Euclidean filter as hard gate
     approved_indices = torch.where(approved_mask)[0]
     
     if len(approved_indices) == 0:

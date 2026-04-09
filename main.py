@@ -56,7 +56,7 @@ class Tee(object):
 
 EXPERIMENT_CONFIGS = [
     {
-        'run': False,  # Set to False to skip this one
+        'run': 0,  # Set to False to skip this one
         'label': f"FedAvg (With no Attack)",
         'aggregator': fed_avg,
         'attack_type': 'none',
@@ -65,7 +65,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'o' 
     },
     {
-        'run': False,  # <-- Set to False to skip the sign_flip test
+        'run': 1,  # <-- Set to False to skip the sign_flip test
         'label': f"FedAvg (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fed_avg,
         'attack_type': config.ATTACK_TYPE,
@@ -74,7 +74,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'x'
     },
     {
-        'run': True,  # <-- Set to False to skip the sign_flip test
+        'run': 1,  # <-- Set to False to skip the sign_flip test
         'label': f"Aegis (With {config.ATTACK_TYPE} Attack)",
         'aggregator': aegis,
         'attack_type': config.ATTACK_TYPE,
@@ -83,7 +83,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 's' # Square
     },    
     {
-        'run': False,  
+        'run': 1,  
         'label': f"CWMed (With {config.ATTACK_TYPE} Attack)",
         'aggregator': cw_med,  # <-- Use the   function
         'attack_type': config.ATTACK_TYPE,
@@ -92,7 +92,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'p'       #   marker (star)
     },
     {
-        'run': False,  
+        'run': 1,  
         'label': f"Krum (With {config.ATTACK_TYPE} Attack)",
         # We use functools.partial to "pre-fill" the fraction_byzantine
         # argument that multi_krum needs.
@@ -108,7 +108,7 @@ EXPERIMENT_CONFIGS = [
         'marker': 'D'       #   marker (diamond)
     },
     {
-        'run': False,  # <-- Set to True to run FoolsGold
+        'run': 1,  # <-- Set to True to run FoolsGold
         'label': f"FoolsGold (With {config.ATTACK_TYPE} Attack)",
         'aggregator': fools_gold,
         'attack_type': config.ATTACK_TYPE,
@@ -121,7 +121,7 @@ EXPERIMENT_CONFIGS = [
         # With fraction_byzantine=0.2 and ~15 clients/round: f=3, need n>=15. OK.
         # If you use config.FRACTION_BYZANTINE=0.33 with small rounds it will ASSERT-fail.
         # Override fraction_byzantine here (and below) independently of config.py.
-        'run': False,  # <-- Set to True to run Bulyan
+        'run': 1,  # <-- Set to True to run Bulyan
         'label': f"Bulyan (With {config.ATTACK_TYPE} Attack)",
         'aggregator': functools.partial(
             bulyan,
@@ -377,7 +377,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'color': '#e67e22'
             },            
             {
-                'run': False,
+                'run': 1,
                 'label': "Aegis (Non-IID - Volume Spam)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
@@ -386,7 +386,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'color': '#1abc9c'
             },        
             {
-                'run': False,
+                'run': 1,
                 'label': "Aegis (Non-IID - ALIE)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
@@ -396,7 +396,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
             },
 
             {
-                'run': False,
+                'run': 1,
                 'label': "Aegis (Non-IID - Sybil)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
@@ -467,7 +467,7 @@ elif config.RUN_ABLATION_STUDY:
         },
         {
             'run': True,
-            'label': f"Aegis [No Directional Filter] ({config.ATTACK_TYPE})",
+            'label': f"Aegis [No Median Decontamination] ({config.ATTACK_TYPE})",
             'aggregator': functools.partial(aegis, ablate_directional=True),
             'attack_type': config.ATTACK_TYPE,
             'fraction_byzantine': config.FRACTION_BYZANTINE,
@@ -496,28 +496,19 @@ elif config.RUN_ABLATION_STUDY:
 elif getattr(config, 'ABLATION_NON_IID_SWEEP', False):
     EXPERIMENT_CONFIGS = []
     SHARDS = [2, 4, 6, 10]
-    SHARD_COLORS = {2: '#e74c3c', 4: '#e67e22', 6: '#3498db', 10: '#2ecc71'}
+    SHARD_COLORS_ATTACK = {2: '#e74c3c', 4: '#e67e22', 6: '#3498db', 10: '#2ecc71'}
+    SHARD_COLORS_NO_ATTACK = {2: '#c0392b', 4: '#d35400', 6: '#2980b9', 10: '#27ae60'}
 
     for s in SHARDS:
         EXPERIMENT_CONFIGS.append({
             'run': True,
-            'label': f"Aegis ({s}-shard - label_flip)",
-            'aggregator': aegis,
-            'data_split': 'NON_IID',
-            'attack_type': 'label_flip',
-            'fraction_byzantine': 0.30,
-            'shards_per_client': s,
-            'color': SHARD_COLORS[s],
-        })
-        EXPERIMENT_CONFIGS.append({
-            'run': True,
-            'label': f"Aegis ({s}-shard - no attack)",
+            'label': f"Aegis ({s}-shard - Baseline)",
             'aggregator': aegis,
             'data_split': 'NON_IID',
             'attack_type': 'none',
             'fraction_byzantine': 0.0,
             'shards_per_client': s,
-            'color': SHARD_COLORS[s],
+            'color': SHARD_COLORS_NO_ATTACK[s],
         })
 elif getattr(config, 'ABLATION_BYZANTINE_SWEEP', False):
     EXPERIMENT_CONFIGS = []
@@ -547,6 +538,41 @@ elif getattr(config, 'ABLATION_BYZANTINE_SWEEP', False):
             'fraction_byzantine': f,
             'color': FRACTION_COLORS[f],
         })
+elif getattr(config, 'MULTI_SEED_EVAL', False):
+    print(f"\n>>> [Config Override] Running Multi-Seed Reproducibility Evaluation <<<")
+
+    EVAL_SEEDS = getattr(config, 'EVAL_SEEDS', [42, 123, 456])
+
+    # Attack groups: each will get its own set of plots
+    ATTACK_GROUPS = [
+        {'run': True,  'attack_type': 'none',        'fraction_byzantine': 0.0,  'label': 'No Attack'},
+        {'run': False,  'attack_type': 'sign_flip',   'fraction_byzantine': 0.30, 'label': 'Sign Flip'},
+        {'run': False,  'attack_type': 'label_flip',  'fraction_byzantine': 0.30, 'label': 'Label Flip'},
+        {'run': False,  'attack_type': 'volume_spam', 'fraction_byzantine': 0.30, 'label': 'Volume Spam'},
+    ]
+    
+    # 3 distinct colors mapped to the 3 seeds
+    SEED_COLORS = ['#3498db', '#e74c3c', '#2ecc71']
+
+    EXPERIMENT_CONFIGS = []
+    for group in ATTACK_GROUPS:
+        for seed_idx, seed in enumerate(EVAL_SEEDS):
+            run_num = seed_idx + 1
+            EXPERIMENT_CONFIGS.append({
+                'run': group.get('run', True),
+                'label': f"Aegis - {group['label']} (Run {run_num})",
+                'aggregator': aegis,
+                'data_split': 'NON_IID',
+                'attack_type': group['attack_type'],
+                'fraction_byzantine': group['fraction_byzantine'],
+                'shards_per_client': 4,
+                'seed': seed,
+                'color': SEED_COLORS[seed_idx],
+                'linestyle': 'solid',
+                'marker': 'o',
+                # Grouping metadata
+                'attack_group': group['label'],
+            })
 
 # --- === 2. SIMULATION RUNNER === ---
 
@@ -575,10 +601,10 @@ def run_simulation(exp_config):
         config.FRACTION_BYZANTINE = exp_config['fraction_byzantine']
     
     # --- Fix Random Seed for Reproducibility ---
-    # Ensures every experiment comparing the same data split gets EXACTLY the same client shards and Byzantines
+    # Use per-experiment seed if provided (multi-seed eval), else global seed
     import numpy as np
     import random
-    seed = config.RANDOM_SEED
+    seed = exp_config.get('seed', config.RANDOM_SEED)
     np.random.seed(seed)
     torch.manual_seed(seed)
     random.seed(seed)
@@ -629,6 +655,7 @@ def run_simulation(exp_config):
     loss_history = []
     attack_intensity_history = []
     participant_counts = []
+    agg_time_history = []
     adaptive_k_history = [] # Track k over time in case of adaptive k
     
     # --- Defense Quality Metrics (for Aegis) ---
@@ -658,15 +685,31 @@ def run_simulation(exp_config):
             current_round=round_num
         )
         
+        # Detailed stats about the participant pool for this round
+        num_real_b   = round_timings.get("num_byzantine_real", 0)
+        num_sybil_b  = round_timings.get("num_byzantine_total", 0) - num_real_b
+        num_real_tot = round_timings.get("num_selected_real", 1)
+        num_all_tot  = round_timings.get("num_selected_total", 1)
+        
+        eff_intensity = (num_real_b + num_sybil_b) / num_all_tot * 100 if num_all_tot > 0 else 0
+        
+        print(f"    > Participants: {num_all_tot} Total ({num_real_tot} Real + {num_sybil_b} Sybils)")
+        print(f"    > Attack Intensity: {eff_intensity:.1f}% Effective ({num_real_b} physical traitors)")
+
         # Add round timings to summary
         timing_summary["client_training"] += round_timings["train_time"]
         timing_summary["server_aggregation"] += round_timings["agg_time"]
         
-        # Track attack intensity for visualization
-        num_byz = round_timings.get("num_byzantine", 0)
-        num_sel = round_timings.get("num_selected", 1)
-        attack_intensity_history.append(num_byz / num_sel if num_sel > 0 else 0.0)
-        participant_counts.append(num_sel)
+        # Track attack intensity for visualization (using TOTAL influence: real + sybils)
+        num_byz_real = round_timings.get("num_byzantine_real", 0)
+        num_byz_total = round_timings.get("num_byzantine_total", 0)
+        num_sel_real = round_timings.get("num_selected_real", 1)
+        num_sel_total = round_timings.get("num_selected_total", 1)
+        
+        # We plot the "Effective Intensity" (total malicious share)
+        attack_intensity_history.append(num_byz_total / num_sel_total if num_sel_total > 0 else 0.0)
+        participant_counts.append(num_sel_total)
+        agg_time_history.append(round_timings.get("agg_time", 0.0))
         
         # Track adaptive k
         adaptive_k_history.append(round_timings.get("adaptive_k", None))
@@ -777,7 +820,9 @@ def run_simulation(exp_config):
     avg_precision = np.mean(precision_history) if precision_history else None
     
     if avg_filter_acc is not None:
-        print(f"\n    [Defense Stats] Avg Filter Accuracy: {avg_filter_acc:.1f}% | Detection Rate: {avg_detection_rate:.1f}% | Precision: {avg_precision:.1f}%")
+        dr_str = f"{avg_detection_rate:.1f}%" if avg_detection_rate is not None else "N/A"
+        pr_str = f"{avg_precision:.1f}%" if avg_precision is not None else "N/A"
+        print(f"\n    [Defense Stats] Avg Filter Accuracy: {avg_filter_acc:.1f}% | Detection Rate: {dr_str} | Precision: {pr_str}")
 
     # Derive a clean aggregator name for the summary table
     agg_func = exp_config['aggregator']
@@ -795,6 +840,7 @@ def run_simulation(exp_config):
         "loss_history": loss_history,
         "attack_intensity": attack_intensity_history,
         "participant_counts": participant_counts,
+        "agg_time_history": agg_time_history,
         "adaptive_k_history": adaptive_k_history,
         "avg_filter_acc": avg_filter_acc,
         "avg_detection_rate": avg_detection_rate,
@@ -809,9 +855,12 @@ def run_simulation(exp_config):
         "precision_history": precision_history,
         "best_accuracy": best_accuracy,
         "best_loss": best_loss,
+        "latest_accuracy": accuracy_history[-1] if accuracy_history else 0.0,
         # For the final summary table
         "aggregator_name": agg_name,
         "attack_type": exp_config.get('attack_type', 'unknown'),
+        "linestyle": exp_config.get('linestyle', 'solid'),
+        "attack_group": exp_config.get('attack_group', None),
     }
 
 # --- === 3. MAIN EXECUTION === ---
@@ -820,13 +869,16 @@ def main():
     """
     Main execution function.
     """
+    import numpy as np
     
     # 1. Initialize Logging
     os.makedirs(config.RESULTS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Build a descriptive prefix based on the active run mode
-    if config.RUN_ABLATION_STUDY:
+    if getattr(config, 'MULTI_SEED_EVAL', False):
+        run_mode = "multi_seed_eval"
+    elif config.RUN_ABLATION_STUDY:
         run_mode = "ablation"
     elif getattr(config, 'ABLATION_NON_IID_SWEEP', False):
         run_mode = "shards_sweep"
@@ -850,24 +902,99 @@ def main():
         print(f"Device: {config.DEVICE}")
         print(f"Log File: {log_filename}")
 
-        # Run all enabled experiments, saving plots progressively after each one
         all_results = []
-        for exp_config in EXPERIMENT_CONFIGS:
-            if exp_config.get('run', True):
-                result = run_simulation(exp_config)
-                all_results.append(result)
-            else:
-                print(f"\n\n------------------------------- Skipping Experiment: {exp_config['label']} -------------------------------")
-                continue
 
-            # --- Save plots after every completed scenario (progressive overwrite) ---
+        # ===================================================================
+        # MULTI-SEED EVAL MODE: Group by attack type, plot per group
+        # ===================================================================
+        if getattr(config, 'MULTI_SEED_EVAL', False):
+            # Discover unique attack groups (preserving insertion order)
+            seen_groups = []
+            for ec in EXPERIMENT_CONFIGS:
+                g = ec.get('attack_group')
+                if g and g not in seen_groups:
+                    seen_groups.append(g)
+
+            group_results = {}  # attack_group -> list of results
+
+            for group_name in seen_groups:
+                print(f"\n\n{'='*90}")
+                print(f"  ATTACK GROUP: {group_name}")
+                print(f"{'='*90}")
+
+                group_configs = [ec for ec in EXPERIMENT_CONFIGS if ec.get('attack_group') == group_name]
+                group_results[group_name] = []
+
+                for exp_config in group_configs:
+                    if not exp_config.get('run', True):
+                        print(f"\n\n------ Skipping: {exp_config['label']} ------")
+                        continue
+
+                    result = run_simulation(exp_config)
+                    all_results.append(result)
+                    group_results[group_name].append(result)
+
+                    # Generate per-experiment diagnostic dashboard
+                    plotter.plot_aegis_diagnostics(result, config)
+                    plotter.plot_complexity_verification(result, config)
+
+                # --- After all seeds of this group complete, save group-level plots ---
+                if group_results[group_name]:
+                    print(f"\n[Plotter] Saving plots for attack group: {group_name} ({len(group_results[group_name])} runs)")
+                    plotter.plot_results(group_results[group_name], config)
+                    plotter.plot_final_summary_bars(group_results[group_name], config)
+
+            # --- Final Multi-Seed Summary Table (Mean ± Std) ---
+            if group_results:
+                col_atk  = 22
+                col_acc  = 22
+                col_loss = 22
+                sep = f"    {'-'*col_atk} | {'-'*col_acc} | {'-'*col_loss}"
+                print(f"\n\n{'='*90}")
+                print(f"  MULTI-SEED EVALUATION SUMMARY (Mean ± Std across {len(getattr(config, 'EVAL_SEEDS', []))} seeds)")
+                print(f"{'='*90}")
+                print(f"    {'Attack Type':<{col_atk}} | {'Best Acc (%)':<{col_acc}} | {'Best Loss':<{col_loss}}")
+                print(sep)
+
+                for group_name, results in group_results.items():
+                    accs  = [r['best_accuracy'] for r in results if r.get('best_accuracy') is not None]
+                    losses = [r['best_loss'] for r in results if r.get('best_loss') is not None]
+
+                    if accs:
+                        acc_str = f"{np.mean(accs):.2f} ± {np.std(accs):.2f}"
+                    else:
+                        acc_str = "N/A"
+                    if losses:
+                        loss_str = f"{np.mean(losses):.4f} ± {np.std(losses):.4f}"
+                    else:
+                        loss_str = "N/A"
+
+                    print(f"    {group_name:<{col_atk}} | {acc_str:<{col_acc}} | {loss_str:<{col_loss}}")
+
+                print(sep)
+                print(f"{'='*90}")
+
+        # ===================================================================
+        # STANDARD MODE: Run sequentially with progressive plotting
+        # ===================================================================
+        else:
+            for exp_config in EXPERIMENT_CONFIGS:
+                if exp_config.get('run', True):
+                    result = run_simulation(exp_config)
+                    all_results.append(result)
+                else:
+                    print(f"\n\n------------------------------- Skipping Experiment: {exp_config['label']} -------------------------------")
+                    continue
+
+                # --- Save plots after every completed scenario (progressive overwrite) ---
             # This ensures partial results are never lost if the run is interrupted.
-            print(f"\n[Plotter] Saving progressive plots with {len(all_results)} scenario(s) so far...")
-            plotter.plot_results(all_results, config)
-            plotter.plot_final_summary_bars(all_results, config)
+                print(f"\n[Plotter] Saving progressive plots with {len(all_results)} scenario(s) so far...")
+                plotter.plot_results(all_results, config)
+                plotter.plot_final_summary_bars(all_results, config)
 
-            # Generate per-experiment diagnostic dashboard
-            plotter.plot_aegis_diagnostics(result, config)
+                # Generate per-experiment diagnostic dashboard
+                plotter.plot_aegis_diagnostics(result, config)
+                plotter.plot_complexity_verification(result, config)
 
         # --- Final confirmation ---
         if not all_results:
@@ -875,25 +1002,28 @@ def main():
             return
 
     finally:
-        # --- Final Experiment Summary Table ---
+        # --- Final Experiment Summary Table (always printed) ---
         if all_results:
-            col_label = 36
+            col_label = 40
             col_agg   = 14
             col_atk   = 22
             col_acc   = 12
+            col_latest = 12
             col_loss  = 10
-            sep = f"    {'-'*col_label} | {'-'*col_agg} | {'-'*col_atk} | {'-'*col_acc} | {'-'*col_loss}"
-            print(f"\n\n{'='*90}")
+            sep = f"    {'-'*col_label} | {'-'*col_agg} | {'-'*col_atk} | {'-'*col_acc} | {'-'*col_latest} | {'-'*col_loss}"
+            print(f"\n\n{'='*125}")
             print(f"  EXPERIMENT SUMMARY ({len(all_results)} run(s) completed)")
-            print(f"{'='*90}")
-            print(f"    {'Experiment':<{col_label}} | {'Aggregator':<{col_agg}} | {'Attack':<{col_atk}} | {'Best Acc (%)':<{col_acc}} | {'Best Loss':<{col_loss}}")
+            print(f"{'='*125}")
+            print(f"    {'Experiment':<{col_label}} | {'Aggregator':<{col_agg}} | {'Attack':<{col_atk}} | {'Best Acc (%)':<{col_acc}} | {'Latest Acc':<{col_latest}} | {'Best Loss':<{col_loss}}")
             print(sep)
             for r in all_results:
                 final_acc  = f"{r['best_accuracy']:.2f}"  if r.get('best_accuracy')  else 'N/A'
+                latest_acc = f"{r['latest_accuracy']:.2f}" if r.get('latest_accuracy') else 'N/A'
                 final_loss = f"{r['best_loss']:.4f}" if r.get('best_loss') else 'N/A'
-                print(f"    {r['label']:<{col_label}} | {r.get('aggregator_name','?'):<{col_agg}} | {r.get('attack_type','?'):<{col_atk}} | {final_acc:<{col_acc}} | {final_loss:<{col_loss}}")
+                print(f"    {r['label']:<{col_label}} | {r.get('aggregator_name','?'):<{col_agg}} | {r.get('attack_type','?'):<{col_atk}} | {final_acc:<{col_acc}} | {latest_acc:<{col_latest}} | {final_loss:<{col_loss}}")
             print(sep)
-            print(f"{'='*90}")
+            print(f"\n    > Note: 'Best Acc' is the peak before loss degradation; 'Latest Acc' is the final round performance.")
+            print(f"{'='*125}")
 
         # 2. Cleanup and Restore stdout
         print(f"\n\n[System] All experiments completed. Closing log file.")
