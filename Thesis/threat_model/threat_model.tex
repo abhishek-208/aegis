@@ -1,0 +1,66 @@
+\documentclass[../main]{subfiles}
+\begin{document}
+
+\chapter{THREAT MODEL AND PROBLEM FORMULATION}
+\label{ch:threat_model}
+
+\section{System Model: The Federated Learning System}
+\label{sec:sys_model}
+
+% TODO: N clients, central server as aggregator,
+% communication graph, partial participation model.
+
+\section{Adversary Model}
+\label{sec:adv_model}
+
+% TODO: Adversary capabilities (knowledge, persistence, coordination bound f < n/2).
+
+\subsection{Inner Product Manipulation (IPM) Attacks}
+\label{sec:ipm}
+
+% TODO: Formal definition of IPM. Adversary constructs g_byz such that
+% <g_byz, g_honest> < 0. Why cosine screening alone is insufficient.
+
+\subsection{Sybil Attacks}
+\label{sec:sybil}
+
+% TODO: Single physical adversary controls multiple virtual identities.
+% Effective Byzantine fraction inflated beyond f.
+
+\subsection{Sign-Flip Attacks}
+\label{sec:sign_flip}
+
+% TODO: g_byz = -alpha * g_honest. Analysis of damage under FedAvg.
+
+\subsection{Label-Flipping and Backdoor Attacks}
+\label{sec:label_flip}
+
+% TODO: Data-poisoning variant; how Aegis provides incidental robustness.
+
+\section{Problem Statement and Design Goals}
+\label{sec:problem_stmt}
+
+% TODO: Formal objectives: (i) convergence guarantee for honest clients,
+% (ii) O(kd) aggregation complexity, (iii) no trusted server gradient.
+
+\begin{problem}[Byzantine-Resilient Aggregation]
+\label{prob:main}
+% TODO: Formal problem statement.
+\end{problem}
+
+\section{Formal Threat Bounds}
+\label{sec:threat_bounds}
+
+% TODO: Theorem stating max tolerable Byzantine fraction and conditions.
+
+\begin{assumption}[Gradient Boundedness]
+\label{asm:grad_bound}
+% TODO
+\end{assumption}
+
+\begin{assumption}[Honest Majority]
+\label{asm:honest_maj}
+% TODO
+\end{assumption}
+
+\end{document}

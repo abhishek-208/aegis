@@ -17,9 +17,8 @@ from collections import OrderedDict
 import config
 from config import (DEVICE, OUTLIER_SENSITIVITY, RWA_EPSILON,
                      ADAPTIVE_THRESHOLD_ENABLED, K_MAX, K_MIN,
-                     WARMUP_ROUNDS, VARIANCE_SENSITIVITY, K_SAFE_FLOOR,
-                     FOOLSGOLD_KAPPA, PASS1_COS_THRESHOLD,
-                     COSINE_PENALTY_WEIGHT)
+                     WARMUP_ROUNDS, K_SAFE_FLOOR,
+                     FOOLSGOLD_KAPPA)
 
 # --- === FOOLSGOLD STATE === ---
 # Persistent per-client gradient history across rounds.
@@ -174,7 +173,7 @@ def aegis(updates, current_round=None,
     # hemisphere from the preliminary median). These are the sign-flip,
     # IPM (large ε), and other direction-reversal attackers.
     if not ablate_directional:
-        directional_survivors_mask = cos_sim_preliminary >= PASS1_COS_THRESHOLD
+        directional_survivors_mask = cos_sim_preliminary >= config.PASS1_COS_THRESHOLD
     else:
         # If directional filtering is ablated, skip Pass 1 screening
         directional_survivors_mask = torch.ones(len(updates), dtype=torch.bool, device=DEVICE)
@@ -222,7 +221,7 @@ def aegis(updates, current_round=None,
 
         # Strategy B: Variance-Normalized
         coeff_of_variation = distance_mad / (median_distance + RWA_EPSILON)
-        k = k_phase * (1.0 + VARIANCE_SENSITIVITY * coeff_of_variation.item())
+        k = k_phase * (1.0 + config.VARIANCE_SENSITIVITY * coeff_of_variation.item())
         k = max(k, K_SAFE_FLOOR)
 
         print(f"    > Adaptive k: {k:.3f} (phase={k_phase:.2f}, CV={coeff_of_variation:.4f}, round={current_round + 1})")
@@ -308,16 +307,21 @@ def aegis(updates, current_round=None,
             AEGIS_REPUTATION[client_id] = new_reputation
 
     # Formula: Score = Clipped_Volume / (E_k + α*P_k + λ*R_k + ε)  where λ = REPUTATION_WEIGHT
-    if not ablate_cosine_penalty:
-        denominator = (approved_distances +
-                       (approved_cosine_penalties * COSINE_PENALTY_WEIGHT) +
-                       (reputation_penalties * config.REPUTATION_WEIGHT) +
-                       RWA_EPSILON)
+    if current_round is not None:
+        credit_ramp = min(current_round / config.CREDIT_WARMUP_ROUNDS, 1.0)
     else:
-        denominator = approved_distances + RWA_EPSILON
-        
-    raw_scores = approved_clipped_sizes / denominator
-    
+        credit_ramp = 1.0
+
+    if not ablate_cosine_penalty:
+        denominator = (credit_ramp * approved_distances +
+                    credit_ramp * (approved_cosine_penalties * config.COSINE_PENALTY_WEIGHT) +
+                    credit_ramp * (reputation_penalties * config.REPUTATION_WEIGHT) +
+                    RWA_EPSILON)
+    else:
+        denominator = credit_ramp * approved_distances + RWA_EPSILON 
+
+    raw_scores = approved_clipped_sizes / denominator  
+
     total_score = torch.sum(raw_scores)
     final_scores = (raw_scores / total_score).unsqueeze(1)
     

@@ -1,0 +1,465 @@
+﻿
+--- Slide 1 ---
+Shape 3: 'M.TECH THESIS DEFENSE  ┬╖  INDIAN INSTITUTE OF TECHNOLOGY DELHI'
+Shape 4: 'Enhanced Aegis'
+Shape 5: 'A Byzantine-Resilient Federated Learning Protocol for Drone Swarms'
+Shape 7: 'Abhishek Kumar Tripathi    (2024EET2845)\nAdvisor:  Prof. Harshan Jagadeesh\nDepartment of Electrical Engineering, IIT Delhi'
+Shape 8: 'June 2026'
+
+--- Slide 2 ---
+Shape 1: 'AGENDA'
+Shape 2: 'Outline'
+Shape 5: '1'
+Shape 6: 'Motivation & the Problem'
+Shape 7: 'FL on heterogeneous edge networks; the Byzantine threat under pathological Non-IID data'
+Shape 9: '2'
+Shape 10: 'Threat Model & Attacks'
+Shape 11: 'Omniscient adaptive adversary; sign-flip, label-flip, IPM, ALIE, Sybil, volume spam'
+Shape 13: '3'
+Shape 14: 'The Aegis Protocol'
+Shape 15: 'Evolution from the interim design; the six mathematical stages; O(kd) complexity'
+Shape 17: '4'
+Shape 18: 'Experimental Setup'
+Shape 19: 'CIFAR-10, 4-shard Non-IID, ImprovedCNN, five robust-aggregator baselines'
+Shape 21: '5'
+Shape 22: 'Results & Analysis'
+Shape 23: 'Per-attack robustness from the finalised experiments; the IPM/ALIE breaches; sweeps'
+Shape 25: '6'
+Shape 26: 'Conclusions & Future Work'
+Shape 27: 'Achievements, honest boundaries, four research directions, references'
+Shape 28: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 29: '2'
+
+--- Slide 3 ---
+Shape 2: '01'
+Shape 4: 'PART ONE'
+Shape 5: 'Motivation & the Problem'
+Shape 6: 'Why federated learning, and why Byzantine resilience is hard under Non-IID data'
+
+--- Slide 4 ---
+Shape 1: 'MOTIVATION'
+Shape 2: 'Why Federated Learning?'
+Shape 4: 'Edge devices ΓÇö drone swarms, hospitals, vehicles ΓÇö collaboratively train a shared model. Only gradient vectors are exchanged; raw data never leaves the node.'
+Shape 7: 'Bandwidth'
+Shape 8: 'Γû¬  One gradient per round, cost scales with model size d ΓÇö not dataset size.\nΓû¬  4.5 MB / round vs ~21 GB to ship raw data: a 4ΓÇô5 order-of-magnitude saving.'
+Shape 11: 'Privacy'
+Shape 12: 'Γû¬  Server observes only gradients ΓÇö never raw data, labels, or local loss.\nΓû¬  Compatible with encryption & integrity checks, no protocol change.'
+Shape 15: 'The catch'
+Shape 16: "Γû¬  Server has zero visibility into any client's data or training.\nΓû¬  A compromised node can submit a poisoned gradient ΓÇö undetectable by inspection."
+Shape 19: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 20: '3'
+
+--- Slide 5 ---
+Shape 1: 'THE CORE DIFFICULTY'
+Shape 2: 'The Compounding Crisis: Pathological Non-IID Data'
+Shape 4: 'Γû¬  Real federated nodes are specialists.\n      ΓÇô  4-shard partition: each client sees only ~40% of classes (╬▒ = 0.5).\n      ΓÇô  Honest gradient dissimilarity ╬ô is 10ΓÇô50├ù larger than IID.\nΓû¬  Every geometric defence filters by distance from a centroid.\n      ΓÇô  Under Non-IID, honest specialist updates ARE centroid-distant.\n      ΓÇô  Filters discard the signal and admit stealthy near-centroid poison.\nΓû¬  The Byzantine Tax\n      ΓÇô  Accuracy lost to rejecting honest clients, even with zero attackers.\n      ΓÇô  Multi-Krum tax Γëê 0.3ΓÇô0.5; Bulyan loses 8.5 pp under no attack.'
+Shape 6: 'The lethal interaction'
+Shape 7: 'Honest specialist  Γëê geometric outlier\nStealthy Byzantine  Γëê near the centroid\nΓåô\nCentroid filters reject the signal\nand admit the poison.'
+Shape 9: 'Center Drag (single-pass median)'
+Shape 11: 'No prior single-stage aggregator handles Non-IID diversity, IPM, and Sybil simultaneously.'
+Shape 12: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 13: '4'
+
+--- Slide 6 ---
+Shape 1: 'RESEARCH GAP'
+Shape 2: 'What Is Missing ΓÇö and the Question'
+Shape 5: 'Research question:  Can one linear-time aggregator protect a highly heterogeneous federated network against coordinated Byzantine attacks\nwithout a crippling accuracy penalty on honest specialist clients?'
+Shape 6: 'Three requirements no existing defence meets together:'
+Shape 9: 'Γ£ô'
+Shape 10: 'Heterogeneity tolerance'
+Shape 11: 'Preserve divergent honest specialists instead of rejecting them as outliers ΓÇö no accuracy penalty on Non-IID clients.'
+Shape 14: 'Γ£ô'
+Shape 15: 'Uncontaminated reference'
+Shape 16: 'Score every update against a clean, debiased center that coordinated, stealthy adversaries cannot tilt.'
+Shape 19: 'Γ£ô'
+Shape 20: 'Influence capping'
+Shape 21: 'Bound what any single actor can manufacture through duplicated identities or inflated data volume.'
+Shape 22: 'ΓåÆ  This gap motivates Aegis.'
+Shape 23: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 24: '5'
+
+--- Slide 7 ---
+Shape 2: '02'
+Shape 4: 'PART TWO'
+Shape 5: 'Threat Model & Attacks'
+Shape 6: 'An omniscient, adaptive, coordinated adversary at up to 40% of the network'
+
+--- Slide 8 ---
+Shape 1: 'THREAT MODEL'
+Shape 2: 'Adversary Capabilities & Assumptions'
+Shape 5: 'The adversary CAN'
+Shape 6: 'Γû¬  Know the aggregation rule and global model.\nΓû¬  Estimate the honest mean gradient (omniscient).\nΓû¬  Fully coordinate all Byzantine clients.\nΓû¬  Adapt every round; attack probability = 1.0.'
+Shape 8: 'THE ADVERSARY CANNOT'
+Shape 9: 'Γ£ò  Intercept honest updates before aggregation\nΓ£ò  Corrupt the server or the model broadcast\nΓ£ò  Break the honest majority (f < K/2)'
+Shape 11: 'Honest-majority bound'
+Shape 14: 'Fixed adversary, random participation'
+Shape 16: 'System: K = 30 clients, one honest non-colluding server, m Γêê [15,25] sampled/round.  Byzantine fraction swept to f = 0.40 ΓÇö Aegis defends gracefully through f = 0.30 (collapse at 0.40).'
+Shape 17: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 18: '6'
+
+--- Slide 9 ---
+Shape 1: 'ATTACKS'
+Shape 2: 'The Threat Matrix'
+Shape 7: 'No single defensive axis defeats all four ΓÇö a robust defence must apply magnitude, direction, and identity checks against a clean, debiased reference.'
+Shape 8: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 9: '7'
+
+--- Slide 10 ---
+Shape 1: 'RELATED WORK'
+Shape 2: 'Existing Defences ΓÇö and Their Limits'
+Shape 5: "Γû¬  Bulyan ΓÇö the strongest prior scheme ΓÇö needs f < K/4; it is inapplicable at our 40% setting.\nΓû¬  Every O(K┬▓d) scheme is prohibitive at scale. Aegis sustains f = 0.30 at O(kd) ΓÇö past Bulyan's f < K/4 ceiling and far cheaper.\nΓû¬  Tolerances above are theoretical (primitive breakdown points); empirically all collapse near f = 0.40 under our Non-IID threat ΓÇö Aegis stays graceful furthest, to f = 0.30."
+Shape 6: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 7: '8'
+
+--- Slide 11 ---
+Shape 2: '03'
+Shape 4: 'PART THREE'
+Shape 5: 'The Aegis Protocol'
+Shape 6: 'From the interim design to the enhanced protocol ΓÇö six mathematical stages, O(kd)'
+
+--- Slide 12 ---
+Shape 1: 'EVOLUTION'
+Shape 2: 'From Initial Aegis to Enhanced Aegis'
+Shape 5: 'The interim protocol proved the concept; the enhanced protocol fixes the false-positive and stealth-attack gaps it exposed.'
+Shape 6: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 7: '9'
+
+--- Slide 13 ---
+Shape 1: 'EVOLUTION'
+Shape 2: 'Why the Protocol Evolved'
+Shape 5: 'Initial Aegis\n(interim)'
+Shape 8: 'Enhanced Aegis\n(final)'
+Shape 12: 'Hard cosine gate was a trap'
+Shape 13: 'cos < 0 either rubber-stamps orthogonal attacks (cos Γëê 0) or amputates honest Non-IID specialists (disjoint data ΓåÆ naturally orthogonal). ΓåÆ continuous soft penalty ╬▒┬╖PΓéû.'
+Shape 16: 'Per-round scoring is blind to stealth'
+Shape 17: "ALIE and low-╬╡ IPM hide inside the round's envelope. ΓåÆ cross-round EMA reputation ╬╗RΓéû accumulates a temporal signal."
+Shape 20: 'Merging the two risked a death spiral'
+Shape 21: 'Reputation cleans the pool ΓåÆ variance drops ΓåÆ threshold tightens ΓåÆ honest clients cut. ΓåÆ decouple: compute K on the full unfiltered set.'
+Shape 22: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 23: '10'
+
+--- Slide 14 ---
+Shape 1: 'THE AEGIS PROTOCOL'
+Shape 2: 'Aggregation Pipeline ΓÇö Architecture'
+Shape 5: 'O(kd)'
+Shape 8: 'Stage 1 two-pass cosine-screened median (clean reference).   Stage 2 adaptive MAD Euclidean gate ΓÇö the only hard filter.   \nStage 3 soft credit score fuses volume, cosine penalty ╬▒┬╖PΓéû, and reputation ╬╗RΓéû into the weights wΓéû.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '11'
+
+--- Slide 15 ---
+Shape 1: 'THE AEGIS PROTOCOL ┬╖ STEP 1'
+Shape 2: 'Step 1: Local Training & Pseudo-Gradients'
+Shape 5: 'O(dk)'
+Shape 8: "Γû¬  Server broadcasts the global model; each client k trains locally and returns weights wΓéû and claimed sample size nΓéû.\nΓû¬  Aegis scores in gradient (delta) space ΓÇö robust to the shared initialisation ΓÇö but aggregates the approved clients' weights."
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '12'
+
+--- Slide 16 ---
+Shape 1: 'THE AEGIS PROTOCOL ┬╖ STEP 2'
+Shape 2: 'Step 2: Two-Pass Median Decontamination'
+Shape 5: 'O(kd)'
+Shape 8: 'Γû¬  Pass 1 screens strongly anti-aligned updates (cos < ╧ä) out of the median pool; Pass 2 recomputes a debiased clean center.\nΓû¬  Defeats Center Drag: IPM / sign-flip can no longer tilt the reference that every downstream score depends on.\nΓû¬  ╧ä = ΓêÆ0.3 is deliberately lenient ΓÇö honest Non-IID specialists (mildly negative cosine) are retained.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '13'
+
+--- Slide 17 ---
+Shape 1: 'THE AEGIS PROTOCOL ┬╖ STEP 3'
+Shape 2: 'Step 3: Dual Anomaly Scoring'
+Shape 5: 'O(kd)'
+Shape 8: 'Γû¬  Every client is re-scored against the clean median on two complementary axes: magnitude (EΓéû) and direction (PΓéû).\nΓû¬  Magnitude-only filters miss IPM; direction-only filters miss amplitude-scaled Sybil floods. Aegis uses both.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '14'
+
+--- Slide 18 ---
+Shape 1: 'THE AEGIS PROTOCOL ┬╖ STEP 4'
+Shape 2: 'Step 4: Adaptive MAD Thresholding'
+Shape 5: 'O(k)'
+Shape 8: 'Γû¬  MAD gives a breakdown-point-0.5 scale estimate; the multiplier kΓü╜ß╡ùΓü╛ decays over warmup and relaxes with round variance (CV).\nΓû¬  The floor k_floor = 4.0 prevents over-rejection of honest specialists in persistent Non-IID rounds. Euclidean is the only hard gate.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '15'
+
+--- Slide 19 ---
+Shape 1: 'THE AEGIS PROTOCOL ┬╖ STEP 5'
+Shape 2: 'Step 5: Reputation & Credit Scoring'
+Shape 5: 'O(m)'
+Shape 8: "Γû¬  Volume clipping caps inflated-dataset spam; an EMA reputation RΓéû accumulates each client's persistent directional penalty.\nΓû¬  The cosine penalty is soft (╬▒┬╖PΓéû) ΓÇö attackers are suppressed in the weight, never hard-excluded. This replaced the interim's hard cosine gate."
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '16'
+
+--- Slide 20 ---
+Shape 1: 'THE AEGIS PROTOCOL ┬╖ STEP 6'
+Shape 2: 'Step 6: Weighted Aggregation'
+Shape 5: 'O(kd)'
+Shape 8: "Γû¬  The new global model is the credit-weighted average of the approved clients' weights.\nΓû¬  No pairwise distance matrix is ever formed ΓÇö this is what keeps the whole pipeline linear in d."
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '17'
+
+--- Slide 21 ---
+Shape 1: 'THE AEGIS PROTOCOL'
+Shape 2: 'Linear-Time Aggregation: O(kd)'
+Shape 9: 'Empirical verification'
+Shape 10: "Γû¬  Aggregation time grows linearly in client count k ΓÇö linear fit R┬▓ = 0.9989.\nΓû¬  Introselect medians + no pairwise matrix ΓåÆ O(kd), matching FedAvg's floor.\nΓû¬  Γëê 30├ù faster than Bulyan at K=30, dΓëê1.12M.\nΓû¬  Server state: a 30-float EMA table (240 bytes) ΓÇö fast failover."
+Shape 11: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 12: '18'
+
+--- Slide 22 ---
+Shape 1: 'THE AEGIS PROTOCOL'
+Shape 2: 'Theoretical Guarantees'
+Shape 5: 'Lemma 1 ┬╖ Pass-1 neutralises IPM'
+Shape 7: 'Any IPM vector ΓêÆ╬╡┬╖ß╕í_H has cosine Γëñ 0 < ╧ä, so it is removed from the median pool ΓÇö the reference mΓéé stays clean.'
+Shape 9: 'Lemma 2 ┬╖ Median breakdown point'
+Shape 11: 'Breakdown-0.5 (f < K/2) bounds the median reference, not the whole pipeline. End-to-end, Aegis stays graceful to f = 0.30 and collapses at f = 0.40 (detection ΓåÆ 0).'
+Shape 13: "The 0.5 breakdown point is the median reference's; end-to-end Aegis stays graceful to f = 0.30 (collapse at 0.40) ΓÇö at the SGD rate and linear O(kd) cost."
+Shape 14: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 15: '19'
+
+--- Slide 23 ---
+Shape 1: 'THE AEGIS PROTOCOL'
+Shape 2: 'Convergence I ΓÇö The Robustness Certificate'
+Shape 6: 'The per-round aggregation error splits into three sources ΓÇö each maps to one experimental regime:'
+Shape 9: 'Honest reweighting distortion'
+Shape 11: 'Unequal honest weights distort the mean even with zero attackers.'
+Shape 12: 'ΓåÆ  Byzantine Tax = 0.08 pp  (Aegis 76.08 vs FedAvg 76.16, no attack).'
+Shape 15: 'Clipped volume leakage'
+Shape 17: "Volume clipping caps every client's share at 2M, so spam cannot dominate."
+Shape 18: 'ΓåÆ  Volume-spam fully nullified  (Γëê 74%, on par with no attack).'
+Shape 21: 'Median contamination'
+Shape 23: 'Surviving Byzantine clients displace the median reference mΓéé by ╬ö_m.'
+Shape 24: 'ΓåÆ  ALIE drags mΓéé  ΓçÆ  collapse to 10% (chance).'
+Shape 26: 'Score suppression keeps the Byzantine weight w_B small ΓÇö and bounds all three terms:'
+Shape 28: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 29: '20'
+
+--- Slide 24 ---
+Shape 1: 'THE AEGIS PROTOCOL'
+Shape 2: 'Convergence II ΓÇö Final Theorem & Residual Bias'
+Shape 6: 'Two terms vanish ΓÇö two are Aegis-specific'
+Shape 7: 'Γû¬  Optimisation gap + SGD noise ΓåÆ 0 at the standard O(1/ΓêÜT) rate as ╬╖_t decays.\nΓû¬  ╬║_A┬╖V_H ΓÇö honest-heterogeneity penalty: the price of unequal honest weighting; grows with the Non-IID variance V_H.\nΓû¬  ╬╢_A ΓÇö residual bias: the ONLY attack-driven, non-vanishing floor. Zero iff no attacker survives the filter.'
+Shape 9: 'Residual bias = two leakages'
+Shape 11: '╬╢_vol is bounded by volume clipping (spam nullified); ╬╢_med explodes when the median is poisoned (ALIE: f_A┬╖r large, ╬ö_m large).'
+Shape 13: 'Corollary ΓÇö perfect filtering recovers clean SGD:'
+Shape 15: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 16: '21'
+
+--- Slide 25 ---
+Shape 1: 'THE AEGIS PROTOCOL'
+Shape 2: 'Theory Meets Experiment ΓÇö Filter Diagnostics'
+Shape 4: 'The detection / false-negative panels are the empirical w_B ΓÇö the convergence verdict tracks ╬╢_A exactly:'
+Shape 7: 'No Attack'
+Shape 8: 'FN n/a ┬╖ ╬╢_A = 0  ΓåÆ  75%  (╬║_A = 3╬║_H, honest distortion only)'
+Shape 11: 'Label-Flip'
+Shape 12: 'FN 100ΓåÆ0%, detectionΓåÆ100%  ΓçÆ  rΓåÆ0, w_BΓåÆ0, ╬╢_A small  ΓåÆ  74%'
+Shape 15: 'ALIE'
+Shape 16: 'FN stuck at 100%, detection 0%  ΓçÆ  rΓåÆ1, ╬╢_med large  ΓåÆ  10%'
+Shape 19: 'Converge iff ╬╢_A is small ΓÇö and ╬╢_A is small iff the filter detects the attack. The theorem predicts every regime the experiments show.'
+Shape 20: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 21: '22'
+
+--- Slide 26 ---
+Shape 2: '04'
+Shape 4: 'PART FOUR'
+Shape 5: 'Experimental Setup'
+Shape 6: 'CIFAR-10, 4-shard Non-IID, K = 30, f = 0.30, 1000 rounds'
+
+--- Slide 27 ---
+Shape 1: 'SETUP'
+Shape 2: 'Experimental Apparatus'
+Shape 6: 'Data'
+Shape 7: 'CIFAR-10 ┬╖ 4-shard label sharding ┬╖ ╬▒ = 0.5'
+Shape 8: 'Γû¬  30 clients, ~1,664 samples each\nΓû¬  ~40% class coverage / client\nΓû¬  ╬ô  10ΓÇô50├ù the IID baseline'
+Shape 11: 'Model'
+Shape 12: 'ImprovedCNN ┬╖ GroupNorm ┬╖ Dropout'
+Shape 13: 'Γû¬  4 conv + 2 FC, ~1.12M params\nΓû¬  SGD, lr 0.01, momentum 0.8\nΓû¬  1 local epoch, batch 32'
+Shape 16: 'Attacks'
+Shape 17: 'f = 0.30 (9/30), p_attack = 1.0'
+Shape 18: 'Γû¬  Sign-flip, Label-flip, Vol-spam\nΓû¬  ALIE (z=1), IPM (╬╡=0.5)\nΓû¬  Sybil (2 clones) ΓåÆ f_eff = 0.56'
+Shape 21: 'Baselines'
+Shape 22: 'Five robust aggregators'
+Shape 23: 'Γû¬  FedAvg, CWMed, Multi-Krum\nΓû¬  FoolsGold, Bulyan (f=0.20)\nΓû¬  Best accuracy over 1000 rounds'
+Shape 24: 'Oracle ceiling (f=0, 3 seeds):  75.53 ┬▒ 0.22%  ΓÇö  the hard limit set by the Non-IID partition itself.'
+Shape 25: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 26: '23'
+
+--- Slide 28 ---
+Shape 2: '05'
+Shape 4: 'PART FIVE'
+Shape 5: 'Results & Analysis'
+Shape 6: 'Per-attack robustness from the finalised experiments ΓÇö one figure at a time'
+
+--- Slide 29 ---
+Shape 1: 'RESULTS'
+Shape 2: 'The Byzantine Tax ΓÇö Cost of Defence Under No Attack'
+Shape 6: '0.08 pp'
+Shape 7: 'Aegis overhead vs FedAvg'
+Shape 8: 'Γû¬  An effectively free defence in the benign case.\nΓû¬  Bulyan loses 8.47 pp with zero attackers ΓÇö Krum selection collapses to a single Non-IID sector.\nΓû¬  Validates ╧ä = ΓêÆ0.3 + adaptive k_floor: honest specialists preserved.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '24'
+
+--- Slide 30 ---
+Shape 1: 'RESULTS ┬╖ BASELINE'
+Shape 2: 'Convergence Stability ΓÇö Three Seeds, No Attack'
+Shape 8: 'Mean 75.53 ┬▒ 0.22% across seeds 42 / 123 / 456 ΓÇö the Non-IID oracle ceiling; single-seed results are representative.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '25'
+
+--- Slide 31 ---
+Shape 1: 'RESULTS ┬╖ BASELINE'
+Shape 2: 'Robust Aggregators vs FedAvg ΓÇö No Attack'
+Shape 8: 'Aegis tracks FedAvg (76.08 vs 76.16); CWMed and Krum plateau 4ΓÇô5 pp lower ΓÇö the Byzantine Tax of centroid filters under Non-IID.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '26'
+
+--- Slide 32 ---
+Shape 1: 'RESULTS ┬╖ AEGIS'
+Shape 2: 'Aegis Across Conventional Attacks'
+Shape 8: 'No-attack and label-flip converge together (~74%); sign-flip and IPM are tightly bounded, not collapsed ΓÇö two-pass median limits the damage.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '28'
+
+--- Slide 33 ---
+Shape 1: 'RESULTS ┬╖ SIGN-FLIP'
+Shape 2: 'Sign-Flip ΓÇö All Aggregators (f = 0.30)'
+Shape 8: 'Aegis 66.6% ΓÇö no early collapse; FedAvg crashes to 40%, FoolsGold to 34%; Krum (70%) leads on this pure-magnitude attack.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '29'
+
+--- Slide 34 ---
+Shape 1: 'RESULTS ┬╖ LABEL-FLIP'
+Shape 2: 'Label-Flip ΓÇö All Aggregators (f = 0.30)'
+Shape 8: 'Aegis is the strongest defence at 74.34% ΓÇö within 1.7 pp of the clean ceiling; the MAD gate intercepts the corrupt gradients.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '30'
+
+--- Slide 35 ---
+Shape 1: 'RESULTS ┬╖ IPM'
+Shape 2: 'Inner-Product Manipulation ΓÇö All Aggregators'
+Shape 8: 'Aegis holds 63.3% by aggregate dilution while CWMed / Krum / Bulyan collapse to Γëñ 17%; only FoolsGold edges ahead (71%).'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '31'
+
+--- Slide 36 ---
+Shape 1: 'RESULTS ┬╖ ALIE'
+Shape 2: 'A Little Is Enough ΓÇö The Breach'
+Shape 8: "Aegis collapses to 10% (chance) ΓÇö ALIE hijacks the median; FoolsGold's history tracking is the only survivor (71%)."
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '32'
+
+--- Slide 37 ---
+Shape 1: 'RESULTS ┬╖ VOLUME SPAM'
+Shape 2: 'Volume Spam ΓÇö All Aggregators (f = 0.30)'
+Shape 8: 'Aegis #1 at 73.77% ΓÇö median volume clipping neutralises the inflation attack; FedAvg collapses to 14%.'
+
+--- Slide 38 ---
+Shape 1: 'RESULTS ┬╖ SYBIL'
+Shape 2: 'Sybil ΓÇö All Aggregators (f = 0.30, k = 2)'
+Shape 8: 'FoolsGold #1 (68.76%) via full-history tracking; Aegis #2 at 63.17%. Geometric baselines destroyed (Krum 14%, CWMed 22%).'
+
+--- Slide 39 ---
+Shape 1: 'RESULTS ┬╖ ADVANCED'
+Shape 2: 'Volume-Spam, ALIE & Sybil vs Aegis'
+Shape 8: 'Volume-spam is fully nullified (74%) by median clipping; ALIE and dense Sybil clusters overwhelm the median anchor.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '33'
+
+--- Slide 40 ---
+Shape 1: 'RESULTS ┬╖ STRESS TEST'
+Shape 2: 'Resilience vs Byzantine Fraction (Sign-Flip)'
+Shape 8: 'Graceful degradation to f = 0.30 (~2.8 pp / +10 pp); a cliff at f = 0.40 as adversaries become a per-round majority and break the median.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '34'
+
+--- Slide 41 ---
+Shape 1: 'RESULTS ┬╖ HETEROGENEITY'
+Shape 2: 'Sensitivity to Non-IID Degree (Shard Sweep)'
+Shape 8: 'At 4 shards the label-flip gap is Γëê 0; extreme skew (2 shards) widens it to ~15 pp as honest variance overlaps the attack.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '35'
+
+--- Slide 42 ---
+Shape 1: 'RESULTS'
+Shape 2: 'Ablation: Which Component Carries the Load?'
+Shape 6: 'Reading the table'
+Shape 7: 'Γû¬  The Euclidean MAD filter is the load-bearing wall: removing it costs 2.12 pp and zeroes detection.\nΓû¬  Adaptive threshold trades precision for recall ΓÇö a fixed k lifts DR to 92% but adds Byzantine Tax.\nΓû¬  Cosine penalty is marginal for label-flip (ΓêÆ0.04) ΓÇö but it is the only signal under IPM.'
+Shape 8: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 9: '36'
+
+--- Slide 43 ---
+Shape 1: 'RESULTS ┬╖ ALIE ABLATION'
+Shape 2: 'No Hyperparameter Recovers ALIE'
+Shape 8: 'Sweeping the cosine-penalty weight ╬▒ leaves accuracy near chance ΓÇö ALIE is a structural gap, not a tuning issue.'
+Shape 9: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 10: '37'
+
+--- Slide 44 ---
+Shape 1: 'RESULTS'
+Shape 2: 'Head-to-Head Under Active Attack  (f = 0.30)'
+Shape 4: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 5: '27'
+Shape 7: 'Γû¬  Aegis is #1 on Label-Flip (+1.49 pp) and Vol Spam (+1.32 pp over Krum). Geometric baselines collapse on Sybil (Krum 14%, CWMed 22%).\nΓû¬  Three regimes: dominant (label-flip, vol-spam), competitive (sign-flip, IPM, Sybil), failed (ALIE). Per-attack figures follow.\nΓû¬  ΓÇá Bulyan evaluated at f = 0.20 (its n ΓëÑ 4f+3 constraint is violated at f = 0.30).'
+
+--- Slide 45 ---
+Shape 1: 'RESULTS'
+Shape 2: 'Summary Across All Attacks'
+Shape 4: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 5: '38'
+Shape 7: 'Γû¬  Aegis is strictly superior to geometric baselines on Label-Flip, Vol Spam, IPM, and Sybil, but lags Multi-Krum on Sign-Flip.\nΓû¬  FoolsGold wins ALIE, IPM & Sybil ΓÇö its full-history tracking outresolves the 20-round EMA. AegisΓÇÖs limitation on median-poisoning attacks is a known tradeoff.'
+
+--- Slide 46 ---
+Shape 2: '06'
+Shape 4: 'PART SIX'
+Shape 5: 'Conclusions & Future Work'
+Shape 6: 'What survives the experimental critique ΓÇö and what comes next'
+
+--- Slide 47 ---
+Shape 1: 'CONCLUSION'
+Shape 2: 'Achievements & Honest Boundaries'
+Shape 6: 'What survives the critique'
+Shape 7: 'Γû¬  Near-zero Byzantine Tax: 0.08 pp vs FedAvg under no attack.\nΓû¬  Dominant label-flip resilience: 74.34%, 98.8% precision.\nΓû¬  O(kd) linear-time aggregation ΓÇö ~30├ù faster than Bulyan (R┬▓=0.999).\nΓû¬  Two-pass median prevents Center Drag ΓÇö a structural contribution.'
+Shape 10: 'Stated boundaries'
+Shape 11: 'Γû¬  IPM partial evasion: 63.3% by dilution, 0% detection ΓÇö velocity patch proposed.\nΓû¬  ALIE catastrophic failure: 10% ΓÇö EMA window too short; remains open.\nΓû¬  f = 0.40 collapse: provable limit of any median-based scheme (0.5 breakdown).'
+Shape 12: 'The failure modes are structural gaps requiring architectural extensions ΓÇö not implementation defects.'
+Shape 13: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 14: '39'
+
+--- Slide 48 ---
+Shape 1: 'FUTURE WORK'
+Shape 2: 'Four Research Directions'
+Shape 6: '1'
+Shape 7: 'Server-Velocity for IPM'
+Shape 8: "Screen against a momentum buffer VΓü╜ß╡ùΓü╗┬╣Γü╛ ΓÇö a pre-debiased reference IPM cannot poison. (Re-activates the interim's server momentum.)"
+Shape 11: '2'
+Shape 12: 'Kalman Reputation for ALIE'
+Shape 13: "Replace fixed-window EMA with a Kalman-filtered estimator ΓÇö adaptive memory at O(Kd), not FoolsGold's O(K┬▓d)."
+Shape 16: '3'
+Shape 17: 'Asynchronous Aegis'
+Shape 18: 'Staleness-weighted cosine penalty to suppress deliberately delayed Byzantine updates over disrupted links.'
+Shape 21: '4'
+Shape 22: 'Dynamic EMA Decay'
+Shape 23: 'Tie ╬│ to network churn ΓÇö shrink memory in volatile rounds, keep long memory when stable.'
+Shape 24: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 25: '40'
+
+--- Slide 49 ---
+Shape 1: 'REFERENCES'
+Shape 2: 'Selected References  (1/2)'
+Shape 4: '[1]  H. B. McMahan et al., ΓÇ£Communication-Efficient Learning of Deep Networks from Decentralized Data,ΓÇ¥ AISTATS, 2017.\n[2]  P. Blanchard et al., ΓÇ£Machine Learning with Adversaries: Byzantine-Tolerant Gradient Descent (Krum),ΓÇ¥ NeurIPS, 2017.\n[3]  D. Yin et al., ΓÇ£Byzantine-Robust Distributed Learning: Towards Optimal Statistical Rates,ΓÇ¥ ICML, 2018.\n[4]  E. M. El Mhamdi et al., ΓÇ£The Hidden Vulnerability of Distributed Learning in Byzantium (Bulyan),ΓÇ¥ ICML, 2018.\n[5]  G. Baruch et al., ΓÇ£A Little Is Enough: Circumventing Defenses for Distributed Learning (ALIE),ΓÇ¥ NeurIPS, 2019.\n[6]  C. Xie et al., ΓÇ£Fall of Empires: Breaking Byzantine-tolerant SGD by Inner Product Manipulation (IPM),ΓÇ¥ UAI, 2019.\n[7]  C. Fung et al., ΓÇ£The Limitations of Federated Learning in Sybil Settings (FoolsGold),ΓÇ¥ RAID, 2020.\n[8]  X. Cao et al., ΓÇ£FLTrust: Byzantine-Robust Federated Learning via Trust Bootstrapping,ΓÇ¥ NDSS, 2021.'
+Shape 5: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 6: '41'
+
+--- Slide 50 ---
+Shape 1: 'REFERENCES'
+Shape 2: 'Selected References  (2/2)'
+Shape 4: '[9]  T. D. Nguyen et al., ΓÇ£FLAME: Taming Backdoors in Federated Learning,ΓÇ¥ USENIX Security, 2022.\n[10]  C. Xie et al., ΓÇ£Zeno: Distributed SGD with Suspicion-based Fault-tolerance,ΓÇ¥ ICML, 2019.\n[11]  S. P. Karimireddy et al., ΓÇ£Learning from History for Byzantine Robust Optimization,ΓÇ¥ ICML, 2021.\n[12]  V. Shejwalkar, A. Houmansadr, ΓÇ£Manipulating the Byzantine (DnC),ΓÇ¥ NDSS, 2021.\n[13]  S. Awan et al., ΓÇ£CONTRA: Defending Against Poisoning Attacks in Federated Learning,ΓÇ¥ ESORICS, 2021.\n[14]  K. Pillutla et al., ΓÇ£Robust Aggregation for Federated Learning (RFA),ΓÇ¥ IEEE Trans. Signal Process., 2022.\n[15]  U. Shahul, J. Harshan, ΓÇ£FORTA: Byzantine-Resilient FL Aggregation via DFT-Guided Krum,ΓÇ¥ arXiv:2507.14588, 2025.\n[16]  T.-M. H. Hsu et al., ΓÇ£Measuring the Effects of Non-Identical Data Distribution for Federated Visual Classification,ΓÇ¥ NeurIPS-W, 2019.'
+Shape 5: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 6: '42'
+
+--- Slide 51 ---
+Shape 3: 'Thank You'
+Shape 4: 'Questions & Discussion'
+Shape 6: 'Enhanced Aegis: A Byzantine-Resilient FL Protocol for Drone Swarms\nAbhishek Kumar Tripathi  ┬╖  2024EET2845  ┬╖  Advisor: Prof. Harshan Jagadeesh\nDepartment of Electrical Engineering, IIT Delhi'
+
+--- Slide 52 ---
+Shape 1: 'APPENDIX ┬╖ BACKUP'
+Shape 2: 'Why These Hyperparameters?'
+Shape 7: 'Enhanced Aegis  ΓÇö  M.Tech Thesis Defense'
+Shape 8: '43'

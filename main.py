@@ -341,7 +341,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
     if RUN_NON_IID:
         EXPERIMENT_CONFIGS += [
             {
-                'run': True,
+                'run': 0,
                 'label': "Aegis (Non-IID - No Attack)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
@@ -377,7 +377,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
                 'color': '#e67e22'
             },            
             {
-                'run': 1,
+                'run': 0,
                 'label': "Aegis (Non-IID - Volume Spam)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
@@ -396,7 +396,7 @@ if config.COMPARE_AEGIS_SCENARIOS:
             },
 
             {
-                'run': 1,
+                'run': 0,
                 'label': "Aegis (Non-IID - Sybil)",
                 'aggregator': aegis,
                 'data_split': 'NON_IID',
@@ -448,7 +448,7 @@ elif config.RUN_ABLATION_STUDY:
             'marker': 'o'
         },
         {
-            'run': True,
+            'run': False,
             'label': f"Aegis [No Volume Clip] ({config.ATTACK_TYPE})",
             'aggregator': functools.partial(aegis, ablate_volume_clipping=True),
             'attack_type': config.ATTACK_TYPE,
@@ -457,7 +457,7 @@ elif config.RUN_ABLATION_STUDY:
             'marker': 'x'
         },
         {
-            'run': True,
+            'run': False,
             'label': f"Aegis [No Euclidean Filter] ({config.ATTACK_TYPE})",
             'aggregator': functools.partial(aegis, ablate_euclidean_filter=True),
             'attack_type': config.ATTACK_TYPE,
@@ -484,7 +484,7 @@ elif config.RUN_ABLATION_STUDY:
             'marker': '^'
         },
         {
-            'run': True,
+            'run': False,
             'label': f"Aegis [No Adaptive Thresholding] ({config.ATTACK_TYPE})",
             'aggregator': functools.partial(aegis, ablate_adaptive=True),
             'attack_type': config.ATTACK_TYPE,
@@ -538,6 +538,91 @@ elif getattr(config, 'ABLATION_BYZANTINE_SWEEP', False):
             'fraction_byzantine': f,
             'color': FRACTION_COLORS[f],
         })
+elif getattr(config, 'ABLATION_SYBIL_SWEEP', False):
+    print(f"\n>>> [Config Override] Running Sybil Clone Sweep (attack_type forced to 'sybil') <<<")
+    
+    SYBIL_COUNTS = [1, 2, 3, 4, 5]
+    SYBIL_COLORS = {1: '#1a9641', 2: '#2166ac', 3: '#d95f02', 4: '#d7191c', 5: '#7b3294'}
+    
+    EXPERIMENT_CONFIGS = []
+    for k in SYBIL_COUNTS:
+        EXPERIMENT_CONFIGS.append({
+            'run': True,
+            'label': f"Aegis (Sybil k={k})",
+            'aggregator': aegis,
+            'data_split': config.DATA_SPLIT_TYPE,
+            'attack_type': 'sybil',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': SYBIL_COLORS[k],
+            'marker': 'o',
+            # Use existing param_override mechanism to change NUM_SYBILS_PER_ATTACKER
+            'param_override_attr': 'NUM_SYBILS_PER_ATTACKER',
+            'param_override_value': k,
+        })
+elif getattr(config, 'ABLATION_IPM_EPSILON_SWEEP', False):
+    print(f"\n>>> [Config Override] Running IPM Epsilon Sweep (attack_type forced to 'ipm') <<<")
+    
+    EPSILON_VALUES = [0.01, 0.1, 0.5, 1.0, 2.0]
+    EPSILON_COLORS = {0.01: '#1a9641', 0.1: '#2166ac', 0.5: '#d95f02', 1.0: '#d7191c', 2.0: '#7b3294'}
+    
+    EXPERIMENT_CONFIGS = []
+    for eps in EPSILON_VALUES:
+        EXPERIMENT_CONFIGS.append({
+            'run': True,
+            'label': f"Aegis (IPM ε={eps})",
+            'aggregator': aegis,
+            'data_split': config.DATA_SPLIT_TYPE,
+            'attack_type': 'ipm',
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': EPSILON_COLORS[eps],
+            'marker': 'o',
+            # Use existing param_override mechanism to change IPM_EPSILON
+            'param_override_attr': 'IPM_EPSILON',
+            'param_override_value': eps,
+        })
+elif getattr(config, 'ABLATION_PARAM_SWEEP', False):
+    print(f"\n>>> [Config Override] Running Aegis Hyperparameter Sweep: {config.SWEEP_PARAM} <<<")
+
+    # Human-readable names for plot labels
+    PARAM_DISPLAY_NAMES = {
+        'variance_sensitivity':  'Var Sensitivity',
+        'pass1_cos_threshold':   'Cos Threshold τ',
+        'cosine_penalty_weight': 'Cos Penalty α',
+    }
+
+    # Map SWEEP_PARAM string to the actual config attribute name
+    PARAM_CONFIG_ATTR = {
+        'variance_sensitivity':  'VARIANCE_SENSITIVITY',
+        'pass1_cos_threshold':   'PASS1_COS_THRESHOLD',
+        'cosine_penalty_weight': 'COSINE_PENALTY_WEIGHT',
+    }
+
+    sweep_param_key = config.SWEEP_PARAM
+    sweep_values = config.PARAM_SWEEP_VALUES[sweep_param_key]
+    sweep_colors = getattr(config, 'SWEEP_COLORS',
+                           ['#e74c3c', '#e67e22', '#2ecc71', '#3498db', '#9b59b6', '#1abc9c'])
+    display_name = PARAM_DISPLAY_NAMES.get(sweep_param_key, sweep_param_key)
+    config_attr  = PARAM_CONFIG_ATTR[sweep_param_key]
+
+    EXPERIMENT_CONFIGS = []
+    for idx, val in enumerate(sweep_values):
+        # Mark the default value in the label
+        default_val = getattr(config, config_attr)
+        is_default = " ★" if val == default_val else ""
+
+        EXPERIMENT_CONFIGS.append({
+            'run': True,
+            'label': f"Aegis [{display_name}={val}]{is_default} ({config.ATTACK_TYPE})",
+            'aggregator': aegis,
+            'attack_type': config.ATTACK_TYPE,
+            'fraction_byzantine': config.FRACTION_BYZANTINE,
+            'color': sweep_colors[idx % len(sweep_colors)],
+            'marker': 'o',
+            # --- Sweep metadata: consumed by run_simulation() ---
+            'param_override_attr': config_attr,   # e.g. 'VARIANCE_SENSITIVITY'
+            'param_override_value': val,           # e.g. 4.5
+        })
+
 elif getattr(config, 'MULTI_SEED_EVAL', False):
     print(f"\n>>> [Config Override] Running Multi-Seed Reproducibility Evaluation <<<")
 
@@ -599,6 +684,17 @@ def run_simulation(exp_config):
         config.SHARDS_PER_CLIENT = exp_config['shards_per_client']
     if 'fraction_byzantine' in exp_config:
         config.FRACTION_BYZANTINE = exp_config['fraction_byzantine']
+    
+    # --- Parameter Sweep Override ---
+    # If this experiment overrides a specific Aegis hyperparameter, apply it now
+    # and stash the original value to restore after the run.
+    _param_override_attr = exp_config.get('param_override_attr', None)
+    _param_original_value = None
+    if _param_override_attr:
+        _param_original_value = getattr(config, _param_override_attr)
+        override_val = exp_config['param_override_value']
+        setattr(config, _param_override_attr, override_val)
+        print(f"    > [Sweep Override] config.{_param_override_attr} = {override_val}  (was {_param_original_value})")
     
     # --- Fix Random Seed for Reproducibility ---
     # Use per-experiment seed if provided (multi-seed eval), else global seed
@@ -797,6 +893,10 @@ def run_simulation(exp_config):
     config.SHARDS_PER_CLIENT = original_shards
     config.FRACTION_BYZANTINE = original_fraction
     
+    # Restore swept parameter
+    if _param_override_attr and _param_original_value is not None:
+        setattr(config, _param_override_attr, _param_original_value)
+    
     print(f"\n  > --- Profiling Summary ---")
     
     # Calculate "Other" time
@@ -884,6 +984,8 @@ def main():
         run_mode = "shards_sweep"
     elif getattr(config, 'ABLATION_BYZANTINE_SWEEP', False):
         run_mode = f"byz_sweep_{config.ATTACK_TYPE}"
+    elif getattr(config, 'ABLATION_PARAM_SWEEP', False):
+        run_mode = f"param_sweep_{config.SWEEP_PARAM}"
     elif config.COMPARE_AEGIS_SCENARIOS:
         run_mode = "comparison"
     else:
@@ -936,7 +1038,8 @@ def main():
 
                     # Generate per-experiment diagnostic dashboard
                     plotter.plot_aegis_diagnostics(result, config)
-                    plotter.plot_complexity_verification(result, config)
+                    if getattr(config, 'PLOT_COMPLEXITY_VERIFICATION', True):
+                        plotter.plot_complexity_verification(result, config)
 
                 # --- After all seeds of this group complete, save group-level plots ---
                 if group_results[group_name]:
@@ -994,7 +1097,8 @@ def main():
 
                 # Generate per-experiment diagnostic dashboard
                 plotter.plot_aegis_diagnostics(result, config)
-                plotter.plot_complexity_verification(result, config)
+                if getattr(config, 'PLOT_COMPLEXITY_VERIFICATION', True):
+                    plotter.plot_complexity_verification(result, config)
 
         # --- Final confirmation ---
         if not all_results:

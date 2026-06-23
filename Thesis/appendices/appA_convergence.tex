@@ -1,0 +1,994 @@
+\documentclass[../main]{subfiles}
+\begin{document}
+
+\chapter{CONVERGENCE ANALYSIS OF AEGIS}
+\label{app:proofs}
+
+This appendix contains the formal convergence proof for the \aegis{}
+protocol. We proceed in a structured manner: first establishing the
+mathematical model and assumptions, then deriving the structural properties
+of \aegis{} weights, bounding the aggregation error, and finally proving
+convergence of the \aegis{}-aggregated SGD update.
+
+%==================================================================
+\section{Mathematical Model of Aegis}
+\label{app:model}
+%==================================================================
+
+Let the global model at communication round~$t$ be $\mathbf{w}_t \in \R^d$.
+Let the total number of clients be $K$, each with local dataset
+$D_k$ and $n_k$ samples. The setting is \emph{Non-IID}.
+
+\subsection{Local Objective}
+
+Each client $k$ minimises its own local loss function:
+\begin{equation}
+    F_k(w) \;=\; \frac{1}{n_k} \sum_{i \in D_k} f_i(w),
+    \label{eq:local_obj}
+\end{equation}
+where $f_i(w)$ is the loss on a single sample and $F_k(w)$ is the
+average loss of client $k$.
+
+\subsection{Global Objective}
+
+The server wants to minimise:
+\begin{equation}
+    F(w) \;=\; \sum_{k=1}^{K} \frac{n_k}{K}\, F_k(w).
+    \label{eq:global_obj}
+\end{equation}
+\subsection{Honest and Byzantine Partitions}
+
+Let $\mathcal{H}$ denote the set of honest clients and
+$\mathcal{B}$ the set of Byzantine clients, with:
+\[
+    \mathcal{H} \cap \mathcal{B} = \emptyset,
+    \qquad
+    \mathcal{H} \cup \mathcal{B} = \{1, 2, \ldots, K\}.
+\]
+Define $h = |\mathcal{H}|$ and $f = |\mathcal{B}|$, so that $h + f = K$.
+
+The client update vector of client~$k$ at round~$t$ is $\mathbf{g}_k^{(t)} \in \R^d$,
+and the honest mean update is:
+\begin{equation}
+    \bar{\mathbf{g}}_H^{(t)} \;=\; \frac{1}{h} \sum_{k \in \mathcal{H}} \mathbf{g}_k^{(t)}.
+    \label{eq:honest_mean}
+\end{equation}
+\subsection{Aegis Aggregate}
+
+After Pass~1 cosine filtering, Pass~2 median computation,
+Euclidean thresholding, credit scoring, and reputation weighting,
+\aegis{} outputs the weighted aggregate:
+\begin{equation}
+    \hat{\mathbf{g}}_t \;=\; \sum_{k \in A_t} w_k^{(t)}\, \mathbf{g}_k^{(t)},
+    \label{eq:aegis_agg}
+\end{equation}
+where $A_t$ is the approved client set and $w_k^{(t)}$ is the normalised
+credit weight assigned by \aegis{}, satisfying $w_k^{(t)} \geq 0$ and
+$\sum_{k \in A_t} w_k^{(t)} = 1$.
+
+\subsection{Server Update}
+\begin{equation}
+    \mathbf{w}_{t+1} \;=\; \mathbf{w}_t - \eta_t\, \hat{\mathbf{g}}_t,
+    \label{eq:server_update}
+\end{equation}
+where $\eta_t$ is the learning rate at round~$t$.
+
+%==================================================================
+\section{Assumptions}
+\label{app:assumptions}
+%==================================================================
+
+\begin{assumption}[\textbf{Smooth Objective Function (A1)}]
+\hfill \\\label{asm:A1}
+The global objective $F(w)$ is $L$-smooth:
+\[
+    \|\nabla F(x) - \nabla F(y)\| \;\leq\; L\,\|x - y\|
+    \qquad \forall\; x, y \in \R^d.
+\]
+\end{assumption}
+
+\begin{assumption}[\textbf{Lower Bounded Objective (A2)}]
+\hfill \\\label{asm:A2}
+$F(w) \geq F^*$ for all $w$, where $F^*$ is a finite minimum value.
+\end{assumption}
+
+\begin{assumption}[\textbf{Bounded Honest Update Variance (A3)}]
+\hfill \\\label{asm:A3}
+The honest mean is $\bar{\mathbf{g}}_H^{(t)} = \frac{1}{h}\sum_{k\in\mathcal{H}} \mathbf{g}_k^{(t)}$.
+The honest variance is:
+\[
+    V_H^{(t)} \;=\; \frac{1}{h} \sum_{k \in \mathcal{H}} \|\mathbf{g}_k^{(t)} - \bar{\mathbf{g}}_H^{(t)}\|^2.
+\]
+Assume $V_H^{(t)} \leq \sigma_H^2$ for all rounds $t$.
+\end{assumption}
+
+\begin{assumption}[\textbf{Honest Majority (A4)}]
+\hfill \\\label{asm:A4}
+$h > f$, or equivalently, $f < K/2$.
+\end{assumption}
+
+\begin{assumption}[\textbf{Bounded Client Updates (A5)}]
+\hfill \\\label{asm:A5}
+There exists $G > 0$ such that $\|\mathbf{g}_k^{(t)}\| \leq G$ for every honest client.
+\end{assumption}
+
+\begin{assumption}[\textbf{Bounded Credit Score (A6)}]
+\hfill \\\label{asm:A6}
+$0 \leq S_k \leq S_{\max}$ for all approved clients.
+\end{assumption}
+
+\begin{assumption}[\textbf{Fixed Reputation During One Round (A7)}]
+\hfill \\\label{asm:A7}
+\aegis{}'s reputation evolves over time via $R_k^{(t)}$. For a given
+round~$t$, $R_k^{(t)}$ is fixed (computed from previous rounds).
+\end{assumption}
+
+\begin{assumption}[\textbf{Positive Client Volume (A8)}]
+\hfill \\\label{asm:A8}
+For every approved client, the clipped volume satisfies
+$\widetilde{V}_k \geq 0$ and $n_k > 0$.
+\end{assumption}
+
+\begin{assumption}[\textbf{$L$-Smooth Objective — Quadratic Upper Bound (A9)}]
+\hfill \\\label{asm:A9}
+There exists a constant $L > 0$ such that for all vectors $x, y$:
+\[
+    f(y) \;\leq\; f(x) + \nabla f(x)^T(y - x) + \frac{L}{2}\|y - x\|^2.
+\]
+\end{assumption}
+
+\begin{assumption}[\textbf{Unbiased Honest Gradient (A10)}]
+\hfill \\\label{asm:A10}
+$\E[\mathbf{g}_i^{(t)}] = \nabla f(\mathbf{x}_t)$ for every honest client.
+\end{assumption}
+
+\begin{assumption}[\textbf{Bounded Honest Gradient Variance (A11)}]
+\hfill \\\label{asm:A11}
+There exists a constant $\sigma_H^2$ such that:
+\[
+    \E_t\!\left[\|\bar{\mathbf{g}}_H^{(t)} - \nabla f(\mathbf{x}_t)\|^2\right] \;\leq\; \sigma_H^2.
+\]
+\end{assumption}
+
+\begin{assumption}[\textbf{Step Size Bound (A12)}]
+\hfill \\\label{asm:A12}
+$0 < \eta_t < \dfrac{1}{2L}$.
+\end{assumption}
+
+%==================================================================
+\section{Aegis Scoring and Aggregation Pipeline}
+\label{app:scoring}
+%==================================================================
+
+\subsection{Pass 1: Preliminary Median and Cosine Filtering}
+
+\textbf{(a)} The server receives all client updates $\mathbf{g}_1^{(t)}, \mathbf{g}_2^{(t)}, \ldots, \mathbf{g}_K^{(t)}$.
+
+\textbf{(b)} Compute the \emph{first median reference} $\mathbf{m}_1^{(t)}$ coordinate-wise:
+\begin{equation}
+    \bigl(\mathbf{m}_1^{(t)}\bigr)_j \;=\; \mathrm{median}\bigl((\mathbf{g}_1^{(t)})_j,\; \ldots,\; (\mathbf{g}_K^{(t)})_j\bigr).
+    \label{eq:first_median}
+\end{equation}
+\textbf{(c)} Compute the cosine similarity of each client~$k$ with $\mathbf{m}_1^{(t)}$:
+\begin{equation}
+    c_k^{(t)} \;=\; \frac{\langle \mathbf{g}_k^{(t)},\; \mathbf{m}_1^{(t)}\rangle}
+    {\|\mathbf{g}_k^{(t)}\|\;\|\mathbf{m}_1^{(t)}\|}.
+    \label{eq:cosine_sim}
+\end{equation}
+\textbf{(d)} Define the Pass~1 approval set with cosine threshold~$\tau$:
+\begin{equation}
+    S_1^{(t)} \;=\; \{k : c_k^{(t)} \geq \tau\}.
+    \label{eq:pass1_set}
+\end{equation}
+This set is used only to clean the median reference.
+
+\subsection{Pass 2: Decontaminated Median}
+
+Using survivors $S_1^{(t)}$, compute the \emph{second median reference}:
+\begin{equation}
+    \bigl(\mathbf{m}_2^{(t)}\bigr)_j \;=\; \mathrm{median}\bigl\{(\mathbf{g}_k^{(t)})_j : k \in S_1^{(t)}\bigr\}.
+    \label{eq:second_median}
+\end{equation}
+\subsection{Euclidean Filter, Cosine Penalty, and Credit Score}
+
+\textbf{(e)} \emph{Euclidean distance}: for every client $k$,
+\begin{equation}
+    E_k^{(t)} \;=\; \|\mathbf{g}_k^{(t)} - \mathbf{m}_2^{(t)}\|.
+    \label{eq:euclidean_dist}
+\end{equation}
+\textbf{(f)} \emph{Cosine penalty}:
+\begin{equation}
+    P_k^{(t)} \;=\; 1 - \frac{\langle \mathbf{g}_k^{(t)},\; \mathbf{m}_2^{(t)}\rangle}
+    {\|\mathbf{g}_k^{(t)}\|\;\|\mathbf{m}_2^{(t)}\|}.
+    \label{eq:cosine_penalty}
+\end{equation}
+\textbf{(g)} \emph{Reputation}: $R_k^{(t)}$ is the reputation penalty of client~$k$, updated via the exponential moving average:
+\begin{equation}
+    R_i^{(t+1)} \;=\; \gamma\, R_i^{(t)} + (1 - \gamma)\, P_i^{(t)}.
+    \label{eq:reputation_update}
+\end{equation}
+\textbf{(h)} \emph{Denominator and credit score}:
+\begin{equation}
+    D_k^{(t)} \;=\; E_k^{(t)} + \alpha\, P_k^{(t)} + \lambda\, R_k^{(t)} + \varepsilon,
+\end{equation}
+where $\alpha$ is the cosine penalty weight, $\lambda$ the reputation penalty weight, and $\varepsilon > 0$ ensures numerical stability. The credit score is:
+\begin{equation}
+    S_k^{(t)} \;=\; \frac{\widetilde{V}_k^{(t)}}{D_k^{(t)}},
+\end{equation}
+where $\widetilde{V}_k^{(t)}$ is the clipped client volume contribution.
+
+\textbf{(i)} The \emph{approval set} $A_t \subseteq \{1, \ldots, K\}$ consists of clients passing the Euclidean threshold.
+
+\textbf{(j)} \emph{Weight normalisation}: let $S_t = \sum_{k \in A_t} S_k^{(t)}$, then:
+\begin{equation}
+    w_k^{(t)} \;=\; \frac{S_k^{(t)}}{S_t}.
+    \label{eq:weight_normalisation}
+\end{equation}
+The \aegis{} aggregate is:
+\begin{equation}
+    \hat{\mathbf{g}}_t \;=\; \sum_{k \in A_t} w_k^{(t)}\, \mathbf{g}_k^{(t)}.
+    \label{eq:aegis_aggregate}
+\end{equation}
+%==================================================================
+\section{Structural Properties of Aegis Weights}
+\label{app:weight_properties}
+%==================================================================
+
+\begin{lemma}[\textbf{Non-Negative Weights}]
+\hfill \\\label{lem:nonneg_weights}
+\hfill \\
+For every approved client $k \in A_t$: $w_k^{(t)} \geq 0$ and $S_k \geq 0$.
+\end{lemma}
+
+\begin{proof}
+We know $w_k^{(t)} = S_k^{(t)} / S_t$.
+Now $S_k^{(t)} = \widetilde{V}_k^{(t)} / D_k^{(t)}$ and $\widetilde{V}_k^{(t)} \geq 0$
+by \cref{asm:A8}. For the denominator:
+$E_k^{(t)} \geq 0$ (it is a norm), $P_k^{(t)} \geq 0$
+(since $P_k^{(t)} = 1 - \cos(\cdot)$ and cosine similarity $\leq 1$),
+$R_k^{(t)} \geq 0$ (bounded reputation, see \cref{lem:bounded_rep}), and
+$\varepsilon > 0$ by assumption.
+Therefore $D_k^{(t)} > 0$, hence $S_k^{(t)} \geq 0$.
+Since $S_t = \sum_{i \in A_t} S_i^{(t)} > 0$, we conclude $w_k^{(t)} \geq 0$.
+This matters because negative weights can create arbitrary cancellation effects.
+\end{proof}
+
+\begin{lemma}[\textbf{Bounded Reputation}]
+\hfill \\\label{lem:bounded_rep}
+\hfill \\
+For all rounds $t$: $0 \leq R_i^{(t)} \leq 2$.
+\end{lemma}
+
+\begin{proof}
+The reputation update is $R_i^{(t+1)} = \gamma R_i^{(t)} + (1-\gamma) P_i^{(t)}$,
+with $P_i^{(t)} = 1 - \cos(\mathbf{g}_i^{(t)}, \mathbf{m}_2^{(t)})$.
+Since $0 \leq P_i^{(t)} \leq 2$, by induction $0 \leq R_i^{(t)} \leq 2$.
+\end{proof}
+
+\begin{lemma}[\textbf{Weights Sum to One}]
+\hfill \\\label{lem:weights_sum}
+\hfill \\
+$\displaystyle\sum_{k \in A_t} w_k^{(t)} = 1$.
+\end{lemma}
+
+\begin{proof}
+$\displaystyle\sum_{k \in A_t} w_k^{(t)} = \sum_{k \in A_t} \frac{S_k^{(t)}}{S_t}
+= \frac{1}{S_t} \sum_{k \in A_t} S_k^{(t)} = \frac{S_t}{S_t} = 1$.
+\end{proof}
+
+\begin{remark}
+This means $\hat{\mathbf{g}}_t$ is a convex combination of approved client updates.
+By \cref{asm:A5}, this implies $\|\hat{\mathbf{g}}_t\| \leq \sum_{k \in A_t} w_k^{(t)} \|\mathbf{g}_k^{(t)}\| \leq G$. That is, the aggregate is bounded whenever honest approved updates are bounded.
+\end{remark}
+
+%==================================================================
+\section{Honest--Byzantine Partition of the Approved Set}
+\label{app:partition}
+%==================================================================
+
+Define the approved honest and Byzantine subsets:
+\begin{align}
+    H_A^{(t)} &= \mathcal{H} \cap A_t &&\text{(honest clients that survive filtering)},
+    \label{eq:honest_approved}\\
+    B_A^{(t)} &= \mathcal{B} \cap A_t &&\text{(Byzantine clients that survive filtering)}.
+    \label{eq:byz_approved}
+\end{align}
+Since every approved client is either honest or Byzantine:
+$A_t = H_A^{(t)} \cup B_A^{(t)}$.
+
+Define the total Byzantine weight and total honest weight:
+\begin{equation}
+    w_B^{(t)} = \sum_{k \in B_A^{(t)}} w_k^{(t)}, \qquad
+    w_H^{(t)} = \sum_{k \in H_A^{(t)}} w_k^{(t)}.
+    \label{eq:weight_partition}
+\end{equation}
+From \cref{lem:weights_sum}: $w_B^{(t)} + w_H^{(t)} = 1$, hence
+$w_H^{(t)} = 1 - w_B^{(t)}$.
+
+\subsection{Aggregation Decomposition}
+
+Define the \emph{normalised honest aggregate}:
+\begin{equation}
+    \widetilde{\mathbf{g}}_H^{(t)} \;=\; \frac{1}{w_H^{(t)}} \sum_{k \in H_A^{(t)}} w_k^{(t)}\, \mathbf{g}_k^{(t)},
+    \label{eq:normalised_honest}
+\end{equation}
+and the \emph{normalised Byzantine aggregate}:
+\begin{equation}
+    \widetilde{\mathbf{g}}_B^{(t)} \;=\; \frac{1}{w_B^{(t)}} \sum_{k \in B_A^{(t)}} w_k^{(t)}\, \mathbf{g}_k^{(t)}.
+    \label{eq:normalised_byz}
+\end{equation}
+Then the \aegis{} aggregate decomposes as:
+\begin{equation}
+    \hat{\mathbf{g}}_t \;=\; w_H^{(t)}\,\widetilde{\mathbf{g}}_H^{(t)} + w_B^{(t)}\,\widetilde{\mathbf{g}}_B^{(t)}.
+    \label{eq:agg_decomp}
+\end{equation}
+Note that the honest term in the aggregation is $\widetilde{\mathbf{g}}_H^{(t)}$ and not
+$\bar{\mathbf{g}}_H^{(t)}$, because \aegis{} may reject some honest clients and assign
+unequal weights to the rest.
+
+\subsection{Structural Bound on Aggregation Error}
+
+Subtracting $\bar{\mathbf{g}}_H^{(t)}$ from both sides of \eqref{eq:agg_decomp} and using
+$w_H^{(t)} = 1 - w_B^{(t)}$, the aggregation error can be written in two
+algebraically equivalent ways. Adding and subtracting
+$w_B^{(t)}\widetilde{\mathbf{g}}_H^{(t)}$ yields \emph{Form~A}:
+\begin{equation}
+    \hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H^{(t)}
+    \;=\; \bigl(\widetilde{\mathbf{g}}_H^{(t)} - \bar{\mathbf{g}}_H^{(t)}\bigr)
+    + w_B^{(t)}\bigl(\widetilde{\mathbf{g}}_B^{(t)} - \widetilde{\mathbf{g}}_H^{(t)}\bigr),
+    \label{eq:structural_error_A}
+\end{equation}
+whereas adding and subtracting $(1 - w_B^{(t)})\bar{\mathbf{g}}_H^{(t)}$ yields the
+symmetric \emph{Form~B}:
+\begin{equation}
+    \hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H^{(t)}
+    \;=\; (1 - w_B^{(t)})\bigl(\widetilde{\mathbf{g}}_H^{(t)} - \bar{\mathbf{g}}_H^{(t)}\bigr)
+    + w_B^{(t)}\bigl(\widetilde{\mathbf{g}}_B^{(t)} - \bar{\mathbf{g}}_H^{(t)}\bigr).
+    \label{eq:structural_error_B}
+\end{equation}
+Both decompositions are exact. We adopt \emph{Form~A}
+\eqref{eq:structural_error_A} throughout the remainder of the analysis, because
+the Byzantine term it isolates, $\widetilde{\mathbf{g}}_B^{(t)} - \widetilde{\mathbf{g}}_H^{(t)}$,
+is precisely the quantity bounded in \cref{app:byz_deviation_full}; this is what
+produces the $(1 + w_B^{(t)})$ coefficient in the final robustness certificate.
+In Form~A:
+\begin{itemize}
+    \item $(\widetilde{\mathbf{g}}_H^{(t)} - \bar{\mathbf{g}}_H^{(t)})$ is the \textbf{honest reweighting distortion} (or Byzantine tax): even without attackers, \aegis{}'s filtering and credit scoring distort the honest mean.
+    \item $w_B^{(t)}(\widetilde{\mathbf{g}}_B^{(t)} - \widetilde{\mathbf{g}}_H^{(t)})$ is the \textbf{Byzantine leakage}: the surviving Byzantine clients pull the aggregate away from the honest aggregate $\widetilde{\mathbf{g}}_H^{(t)}$, and their influence is proportional to $w_B^{(t)}$.
+\end{itemize}
+
+Taking norms in \eqref{eq:structural_error_A} and applying the triangle inequality:
+\begin{equation}
+    \|\hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H^{(t)}\|
+    \;\leq\; \|\widetilde{\mathbf{g}}_H^{(t)} - \bar{\mathbf{g}}_H^{(t)}\|
+    + w_B^{(t)}\|\widetilde{\mathbf{g}}_B^{(t)} - \widetilde{\mathbf{g}}_H^{(t)}\|.
+    \label{eq:error_triangle}
+\end{equation}
+%==================================================================
+\section{Bounding Byzantine Deviation from Honest Reference}
+\label{app:byz_bound}
+%==================================================================
+
+\begin{lemma}[\textbf{Distance Cancellation Property}]
+\hfill \\\label{lem:distance_cancellation}
+\hfill \\
+Recall the \aegis{} credit score $S_k = \widetilde{V}_k / D_k$ where
+$D_k = E_k + \alpha P_k + \lambda R_k + \varepsilon$.
+For a Byzantine client $b$:
+\[
+    w_b = \frac{S_b}{S} = \frac{\widetilde{V}_b}{S\,D_b}
+    = \frac{\widetilde{V}_b}{S(E_b + \alpha P_b + \lambda R_b + \varepsilon)}.
+\]
+Consider the product $w_b E_b$. Since $D_b \geq E_b$, we have
+$E_b / D_b \leq 1$, therefore:
+\begin{equation}
+    w_b E_b \;=\; \frac{\widetilde{V}_b E_b}{S\,D_b} \;\leq\; \frac{\widetilde{V}_b}{S}.
+    \label{eq:dist_cancel}
+\end{equation}
+This means that an increase in attack magnitude does not necessarily increase influence: the Euclidean distance appearing in both the weight denominator and the deviation bound causes \emph{cancellation}.
+\end{lemma}
+
+\subsection{Median Reference Error}
+
+Define the \emph{median contamination}:
+\begin{equation}
+    \Delta_m^{(t)} \;=\; \|\mathbf{m}_2^{(t)} - \bar{\mathbf{g}}_H^{(t)}\|.
+    \label{eq:median_contam}
+\end{equation}
+Small $\Delta_m^{(t)}$ means the median is close to the honest center;
+large $\Delta_m^{(t)}$ means the median has been corrupted.
+
+\subsection{Bounding Individual Byzantine Deviation}
+
+For an approved Byzantine update $\mathbf{g}_b^{(t)}$, insert the median:
+\[
+    \mathbf{g}_b^{(t)} - \bar{\mathbf{g}}_H^{(t)} = (\mathbf{g}_b^{(t)} - \mathbf{m}_2^{(t)}) + (\mathbf{m}_2^{(t)} - \bar{\mathbf{g}}_H^{(t)}).
+\]
+Taking norms:
+\begin{equation}
+    \|\mathbf{g}_b^{(t)} - \bar{\mathbf{g}}_H^{(t)}\| \;\leq\; E_b^{(t)} + \Delta_m^{(t)},
+    \label{eq:byz_deviation}
+\end{equation}
+where $E_b^{(t)} = \|\mathbf{g}_b^{(t)} - \mathbf{m}_2^{(t)}\|$ is the Euclidean distance.
+The Byzantine client can deviate from the honest mean for only two reasons:
+(1) it is far from the median, measured by $E_b^{(t)}$, and
+(2) the median itself is corrupted, measured by $\Delta_m^{(t)}$.
+
+\subsection{Weighting the Byzantine Deviation}
+
+Multiplying both sides by $w_b^{(t)}$:
+\[
+    w_b^{(t)}\|\mathbf{g}_b^{(t)} - \bar{\mathbf{g}}_H^{(t)}\| \;\leq\; w_b^{(t)} E_b^{(t)} + w_b^{(t)}\Delta_m^{(t)}.
+\]
+Summing over all approved Byzantine clients and applying the distance cancellation
+(\cref{lem:distance_cancellation}):
+\begin{equation}
+    \sum_{b \in B_A^{(t)}} w_b\|\mathbf{g}_b - \bar{\mathbf{g}}_H\|
+    \;\leq\; \sum_{b \in B_A^{(t)}} \frac{\widetilde{V}_b}{S} + \Delta_m\, w_B.
+    \label{eq:byz_sum_bound}
+\end{equation}
+\begin{lemma}[\textbf{Volume Clipping Bound}]
+\hfill \\\label{lem:volume_clip}
+\hfill \\
+Let the raw client volume be $v_i$. \aegis{} replaces it with
+$\widetilde{V}_i = \min(v_i, 2M)$, where $M = \mathrm{median}(v_j : j \in A)$.
+For every approved Byzantine client, $\widetilde{V}_b \leq 2M$.
+Therefore:
+\begin{equation}
+    \sum_{b \in B_A^{(t)}} \widetilde{V}_b \;\leq\; 2M\,|B_A|.
+    \label{eq:volume_clip}
+\end{equation}
+\end{lemma}
+
+\subsection{Score Advantage of Byzantine Clients}
+
+Define the \emph{score advantage ratio} of Byzantine clients:
+\begin{equation}
+    r \;=\; \frac{\max_{b} S_b}{\min_{h} S_h} \;=\; \frac{S_B^{\max}}{S_H^{\min}}.
+    \label{eq:score_advantage}
+\end{equation}
+Since $S_H^{\min} > 0$ (from \cref{lem:nonneg_weights}) and
+$S_b \leq S_B^{\max} = r\, S_H^{\min}$ for every Byzantine client, we obtain:
+\begin{equation}
+    \sum_{b \in B_A} S_b \;\leq\; |B_A|\, r\, S_H^{\min},
+    \qquad
+    \sum_{h \in H_A} S_h \;\geq\; |H_A|\, S_H^{\min}.
+    \label{eq:score_bounds}
+\end{equation}
+Since $A = H_A \cup B_A$, the total score is
+$S = \sum_{h \in H_A} S_h + \sum_{b \in B_A} S_b$.
+The total Byzantine weight:
+\[
+    w_B = \frac{\sum_{b \in B_A} S_b}{\sum_{h \in H_A} S_h + \sum_{b \in B_A} S_b}.
+\]
+Replacing the numerator by its upper bound and the denominator by its lower bound:
+\begin{equation}
+    \boxed{w_B \;\leq\; \frac{|B_A|\,r}{|H_A| + |B_A|\,r}.}
+    \label{eq:wB_bound}
+\end{equation}
+\begin{remark}
+$w_B$ depends on only two factors:
+(1)~the number of surviving attackers~$|B_A|$, and
+(2)~the relative score quality~$r$.
+\end{remark}
+
+%==================================================================
+\section{Honest Reweighting Distortion}
+\label{app:honest_distortion}
+%==================================================================
+
+\textbf{Objective}: Bound $\|\widetilde{\mathbf{g}}_H^{(t)} - \bar{\mathbf{g}}_H^{(t)}\|$.
+
+Recall $\hat{\mathbf{g}}_t = w_H \widetilde{\mathbf{g}}_H + w_B \widetilde{\mathbf{g}}_B$ and, from Form~A
+\eqref{eq:error_triangle},
+$\|\hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H\| \leq \|\widetilde{\mathbf{g}}_H - \bar{\mathbf{g}}_H\| + w_B\|\widetilde{\mathbf{g}}_B - \widetilde{\mathbf{g}}_H\|$.
+When $w_B = 0$ (no Byzantine clients), $w_H = 1$ and
+$\hat{\mathbf{g}}_t = \widetilde{\mathbf{g}}_H$, so the error is purely from honest filtering.
+This represents the \emph{intrinsic robustness cost} of \aegis{}.
+
+\subsection{Deriving the Distortion}
+
+We know $\bar{\mathbf{g}}_H^{(t)}$ is the ideal reference where every honest client
+contributes equally. But $\widetilde{\mathbf{g}}_H^{(t)}$ uses only approved honest clients
+with unequal weights, so $\widetilde{\mathbf{g}}_H^{(t)} \neq \bar{\mathbf{g}}_H^{(t)}$ in general.
+
+Rewrite each honest gradient as $\mathbf{g}_h = \bar{\mathbf{g}}_H + (\mathbf{g}_h - \bar{\mathbf{g}}_H)$,
+where $\mathbf{g}_h - \bar{\mathbf{g}}_H$ is the honest deviation from the honest mean. Substituting:
+\[
+    \widetilde{\mathbf{g}}_H = \frac{1}{w_H}\sum_{h \in H_A} w_h\bigl(\bar{\mathbf{g}}_H + (\mathbf{g}_h - \bar{\mathbf{g}}_H)\bigr)
+    = \underbrace{\frac{1}{w_H}\Bigl(\sum_{h \in H_A} w_h\Bigr)}_{=1}\,\bar{\mathbf{g}}_H
+    + \frac{1}{w_H}\sum_{h \in H_A} w_h(\mathbf{g}_h - \bar{\mathbf{g}}_H).
+\]
+Therefore:
+\begin{equation}
+    \widetilde{\mathbf{g}}_H^{(t)} - \bar{\mathbf{g}}_H^{(t)} \;=\;
+    \frac{1}{w_H}\sum_{h \in H_A} w_h\,(\mathbf{g}_h - \bar{\mathbf{g}}_H).
+    \label{eq:honest_distortion}
+\end{equation}
+Taking norms and applying the triangle inequality:
+\begin{equation}
+    \|\widetilde{\mathbf{g}}_H^{(t)} - \bar{\mathbf{g}}_H^{(t)}\| \;\leq\;
+    \frac{1}{w_H}\sum_{h \in H_A} w_h\,\|\mathbf{g}_h - \bar{\mathbf{g}}_H\|.
+    \label{eq:honest_distortion_bound}
+\end{equation}
+\subsection{Relating to Honest Variance via Cauchy--Schwarz}
+
+Define the honest gradient variation:
+\begin{equation}
+    V_H \;=\; \frac{1}{h}\sum_{h \in \mathcal{H}} \|\mathbf{g}_h - \bar{\mathbf{g}}_H\|^2.
+    \label{eq:honest_variation}
+\end{equation}
+Let $\delta_h = \|\mathbf{g}_h - \bar{\mathbf{g}}_H\|$.
+Now $w_h \delta_h = (\sqrt{w_h})(\sqrt{w_h}\,\delta_h)$.
+Applying the Cauchy--Schwarz inequality:
+\[
+    \Bigl(\sum_h w_h \delta_h\Bigr)^2
+    \;\leq\; \Bigl(\sum_h w_h\Bigr)\Bigl(\sum_h w_h \delta_h^2\Bigr)
+    = w_H \sum_{h \in H_A} w_h \delta_h^2.
+\]
+Taking square roots:
+$\sum_h w_h \delta_h \leq \sqrt{w_H \sum_{h \in H_A} w_h \delta_h^2}$.
+
+Substituting back into \eqref{eq:honest_distortion_bound}:
+\begin{equation}
+    \|\widetilde{\mathbf{g}}_H - \bar{\mathbf{g}}_H\| \;\leq\;
+    \sqrt{\frac{1}{w_H}\sum_{h \in H_A} w_h\,\|\mathbf{g}_h - \bar{\mathbf{g}}_H\|^2}.
+    \label{eq:distortion_cs}
+\end{equation}
+\subsection{Converting to Global Honest Variance}
+
+Define the maximum honest weight: $w_{\max}^{(H)} = \max_{h \in H_A} w_h$.
+Then:
+\[
+    \sum_{h \in H_A} w_h\,\|\mathbf{g}_h - \bar{\mathbf{g}}_H\|^2
+    \;\leq\; w_{\max}^{(H)}\sum_{h \in H_A} \|\mathbf{g}_h - \bar{\mathbf{g}}_H\|^2.
+\]
+Since $H_A \subseteq \mathcal{H}$:
+$\sum_{h \in H_A} \|\mathbf{g}_h - \bar{\mathbf{g}}_H\|^2 \leq \sum_{h \in \mathcal{H}} \|\mathbf{g}_h - \bar{\mathbf{g}}_H\|^2 = h\, V_H$.
+
+Let the \emph{Aegis-induced distortion coefficient} be:
+\begin{equation}
+    \kappa_H \;=\; \frac{h\, w_{\max}^{(H)}}{w_H}.
+    \label{eq:kappa_H}
+\end{equation}
+Then:
+\begin{equation}
+    \boxed{\|\widetilde{\mathbf{g}}_H - \bar{\mathbf{g}}_H\|^2 \;\leq\; \kappa_H \cdot V_H.}
+    \label{eq:variance_distortion}
+\end{equation}
+This is the \emph{variance-based distortion theorem}.
+
+%==================================================================
+\section{Bounding Byzantine Deviation: \texorpdfstring{$w_B\|\widetilde{\mathbf{g}}_B - \widetilde{\mathbf{g}}_H\|$}{w\_B ||g\_B - g\_H||}}
+\label{app:byz_deviation_full}
+%==================================================================
+
+From the normalised Byzantine aggregate:
+\[
+    \widetilde{\mathbf{g}}_B - \widetilde{\mathbf{g}}_H = (\widetilde{\mathbf{g}}_B - \mathbf{m}_2) + (\mathbf{m}_2 - \widetilde{\mathbf{g}}_H).
+\]
+Applying triangle inequality:
+$\|\widetilde{\mathbf{g}}_B - \widetilde{\mathbf{g}}_H\| \leq \|\widetilde{\mathbf{g}}_B - \mathbf{m}_2\| + \|\mathbf{m}_2 - \widetilde{\mathbf{g}}_H\|$.
+
+\textbf{Bounding $\|\widetilde{\mathbf{g}}_B - \mathbf{m}_2\|$}:
+\[
+    \widetilde{\mathbf{g}}_B - \mathbf{m}_2 = \frac{1}{w_B}\sum_{b \in B_A} w_b(\mathbf{g}_b - \mathbf{m}_2).
+\]
+Taking norms:
+$\|\widetilde{\mathbf{g}}_B - \mathbf{m}_2\| \leq \frac{1}{w_B}\sum_{b \in B_A} w_b E_b$.
+Applying distance cancellation (\cref{lem:distance_cancellation}):
+\begin{equation}
+    \|\widetilde{\mathbf{g}}_B - \mathbf{m}_2\| \;\leq\; \frac{1}{w_B}\cdot\frac{\sum_{b \in B_A} \widetilde{V}_b}{S}.
+    \label{eq:byz_m2_bound}
+\end{equation}
+\textbf{Bounding $\|\mathbf{m}_2 - \widetilde{\mathbf{g}}_H\|$}:
+\[
+    \mathbf{m}_2 - \widetilde{\mathbf{g}}_H = (\mathbf{m}_2 - \bar{\mathbf{g}}_H) + (\bar{\mathbf{g}}_H - \widetilde{\mathbf{g}}_H).
+\]
+Therefore:
+$\|\mathbf{m}_2 - \widetilde{\mathbf{g}}_H\| \leq \Delta_m + \sqrt{\kappa_H V_H}$ (from the variance-based distortion theorem).
+
+Combining and multiplying by $w_B$:
+\begin{equation}
+    \boxed{w_B\|\widetilde{\mathbf{g}}_B - \widetilde{\mathbf{g}}_H\| \;\leq\;
+    \frac{\sum_{b \in B_A}\widetilde{V}_b}{S} + w_B \Delta_m + w_B\sqrt{\kappa_H V_H}.}
+    \label{eq:full_byz_bound}
+\end{equation}
+%==================================================================
+\section{Aegis Robustness Certificate}
+\label{app:robustness}
+%==================================================================
+
+Substituting the honest distortion bound and Byzantine leakage bound
+into the structural error \eqref{eq:error_triangle}:
+\begin{equation}
+    \|\hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H\|
+    \;\leq\; (1 + w_B)\sqrt{\kappa_H V_H}
+    + \frac{\sum_{b \in B_A}\widetilde{V}_b}{S}
+    + w_B \Delta_m.
+    \label{eq:robustness_cert}
+\end{equation}
+Applying the volume clipping bound (\cref{lem:volume_clip}):
+
+\begin{theorem}[\textbf{Aegis Aggregation Error Bound}]
+\hfill \\\label{thm:agg_error}
+\begin{equation}
+    \boxed{\|\hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H\|
+    \;\leq\; (1 + w_B)\sqrt{\kappa_H V_H}
+    + \frac{2M\,|B_A|}{S}
+    + w_B \Delta_m.}
+    \label{eq:agg_error_bound}
+\end{equation}
+\end{theorem}
+
+The three terms have clear interpretations:
+\begin{itemize}
+    \item $(1 + w_B)\sqrt{\kappa_H V_H}$: honest reweighting distortion,
+    \item $\frac{2M\,|B_A|}{S}$: clipped Byzantine volume leakage (from the distance cancellation theorem),
+    \item $w_B \Delta_m$: median contamination.
+\end{itemize}
+
+%==================================================================
+\section{Convergence Analysis}
+\label{app:convergence}
+%==================================================================
+
+\subsection{Aegis Aggregation Error}
+
+Define the \emph{Aegis aggregation error}:
+\begin{equation}
+    \mathbf{e}_t \;=\; \hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H^{(t)},
+    \label{eq:aegis_error}
+\end{equation}
+so that $\hat{\mathbf{g}}_t = \bar{\mathbf{g}}_H^{(t)} + \mathbf{e}_t$.
+
+From \cref{thm:agg_error}:
+\begin{equation}
+    \boxed{\|\mathbf{e}_t\| \;\leq\; B_t
+    \;:=\; (1 + w_B)\sqrt{\kappa_H V_H^{(t)}}
+    + \frac{2M\,|B_A|}{S}
+    + w_B \Delta_m.}
+    \label{eq:Bt_def}
+\end{equation}
+\subsection{Incorporating the Aegis Error into SGD Recursion}
+
+Recall the objective function $f: \R^d \to \R$, with $\mathbf{x}^* = \arg\min_{\mathbf{x}} f(\mathbf{x})$.
+
+\textbf{Standard SGD update} (without Byzantine clients):
+$\mathbf{x}_{t+1} = \mathbf{x}_t - \eta_t \bar{\mathbf{g}}_H^{(t)}$.
+
+\textbf{Aegis SGD update}: The server does not have access to $\bar{\mathbf{g}}_H^{(t)}$
+but instead observes $\hat{\mathbf{g}}_t$:
+$\mathbf{x}_{t+1} = \mathbf{x}_t - \eta_t \hat{\mathbf{g}}_t = \mathbf{x}_t - \eta_t(\bar{\mathbf{g}}_H^{(t)} + \mathbf{e}_t)$.
+
+\subsection{Applying Smoothness to Aegis SGD Update}
+
+Goal: understand $f(\mathbf{x}_{t+1}) - f(\mathbf{x}_t)$.
+
+Applying the smoothness inequality (\cref{asm:A9}) with $x = \mathbf{x}_t$ and $y = \mathbf{x}_{t+1}$:
+\[
+    f(\mathbf{x}_{t+1}) \leq f(\mathbf{x}_t) + \nabla f(\mathbf{x}_t)^T(\mathbf{x}_{t+1} - \mathbf{x}_t)
+    + \frac{L}{2}\|\mathbf{x}_{t+1} - \mathbf{x}_t\|^2.
+\]
+Substituting $\mathbf{x}_{t+1} - \mathbf{x}_t = -\eta_t(\bar{\mathbf{g}}_H^{(t)} + \mathbf{e}_t)$:
+\begin{equation}
+    f(\mathbf{x}_{t+1}) \leq f(\mathbf{x}_t) - \eta_t \nabla f(\mathbf{x}_t)^T(\bar{\mathbf{g}}_H^{(t)} + \mathbf{e}_t)
+    + \frac{L}{2}\eta_t^2\|\bar{\mathbf{g}}_H^{(t)} + \mathbf{e}_t\|^2.
+    \label{eq:smoothness_applied}
+\end{equation}
+Now $\nabla f(\mathbf{x}_t)^T(\bar{\mathbf{g}}_H^{(t)} + \mathbf{e}_t) = \nabla f(\mathbf{x}_t)^T\bar{\mathbf{g}}_H^{(t)} + \nabla f(\mathbf{x}_t)^T \mathbf{e}_t$, and
+$\|\bar{\mathbf{g}}_H^{(t)} + \mathbf{e}_t\|^2 = \|\bar{\mathbf{g}}_H^{(t)}\|^2 + 2(\bar{\mathbf{g}}_H^{(t)})^T \mathbf{e}_t + \|\mathbf{e}_t\|^2$.
+
+Therefore:
+\begin{align}
+    f(\mathbf{x}_{t+1}) &\leq f(\mathbf{x}_t) - \eta_t \nabla f(\mathbf{x}_t)^T \bar{\mathbf{g}}_H^{(t)}
+    \;-\; \eta_t \nabla f(\mathbf{x}_t)^T \mathbf{e}_t \nonumber\\
+    &\quad + \frac{L}{2}\eta_t^2\|\bar{\mathbf{g}}_H^{(t)}\|^2
+    + L\eta_t^2 (\bar{\mathbf{g}}_H^{(t)})^T \mathbf{e}_t
+    + \frac{L}{2}\eta_t^2\|\mathbf{e}_t\|^2.
+    \label{eq:full_descent}
+\end{align}
+\subsection{Bounding the Aegis Error Terms}
+
+We identify three error terms:
+\begin{align*}
+    T_1 &= -\eta_t \nabla f(\mathbf{x}_t)^T \mathbf{e}_t, \\
+    T_2 &= L\eta_t^2 (\bar{\mathbf{g}}_H^{(t)})^T \mathbf{e}_t, \\
+    T_3 &= \frac{L}{2}\eta_t^2 \|\mathbf{e}_t\|^2.
+\end{align*}
+\textbf{Bounding $T_1$}:
+$T_1$ can be positive or negative. By Cauchy--Schwarz:
+$|-\eta_t \nabla f(\mathbf{x}_t)^T \mathbf{e}_t| \leq \eta_t\|\nabla f(\mathbf{x}_t)\|\,\|\mathbf{e}_t\|$.
+Since $\|\mathbf{e}_t\| \leq B_t$:
+\begin{equation}
+    -\eta_t \nabla f(\mathbf{x}_t)^T \mathbf{e}_t \;\leq\; \eta_t\|\nabla f(\mathbf{x}_t)\|\, B_t.
+    \label{eq:T1_bound}
+\end{equation}
+\textbf{Bounding $T_2$}:
+By Cauchy--Schwarz: $|(\bar{\mathbf{g}}_H^{(t)})^T \mathbf{e}_t| \leq \|\bar{\mathbf{g}}_H^{(t)}\|\,\|\mathbf{e}_t\|$.
+Therefore:
+\begin{equation}
+    L\eta_t^2(\bar{\mathbf{g}}_H^{(t)})^T \mathbf{e}_t \;\leq\; L\eta_t^2\|\bar{\mathbf{g}}_H^{(t)}\|\, B_t.
+    \label{eq:T2_bound}
+\end{equation}
+\textbf{Bounding $T_3$}:
+Since $\|\mathbf{e}_t\| \leq B_t$:
+\begin{equation}
+    \frac{L}{2}\eta_t^2\|\mathbf{e}_t\|^2 \;\leq\; \frac{L}{2}\eta_t^2 B_t^2.
+    \label{eq:T3_bound}
+\end{equation}
+Substituting all three bounds:
+\begin{equation}
+\boxed{
+\begin{aligned}
+    f(\mathbf{x}_{t+1}) &\leq f(\mathbf{x}_t) - \eta_t \nabla f(\mathbf{x}_t)^T \bar{\mathbf{g}}_H^{(t)}
+    + \eta_t\|\nabla f(\mathbf{x}_t)\|\, B_t \\
+    &\quad + \frac{L}{2}\eta_t^2\|\bar{\mathbf{g}}_H^{(t)}\|^2
+    + L\eta_t^2\|\bar{\mathbf{g}}_H^{(t)}\|\, B_t
+    + \frac{L}{2}\eta_t^2 B_t^2.
+\end{aligned}
+}
+    \label{eq:all_bounds}
+\end{equation}
+\subsection{Relation between Honest Gradient and True Gradient}
+
+We know $\bar{\mathbf{g}}_H^{(t)} = \frac{1}{h}\sum_{i \in \mathcal{H}} \mathbf{g}_i^{(t)}$.
+From \cref{asm:A10}: $\E[\mathbf{g}_i^{(t)}] = \nabla f(\mathbf{x}_t)$ for all honest clients.
+Therefore:
+\begin{equation}
+    \E\bigl[\bar{\mathbf{g}}_H^{(t)}\bigr] = \nabla f(\mathbf{x}_t).
+    \label{eq:unbiased_honest}
+\end{equation}
+Analysing the progress term:
+$\E_t[\nabla f(\mathbf{x}_t)^T \bar{\mathbf{g}}_H^{(t)}] = \nabla f(\mathbf{x}_t)^T \E_t[\bar{\mathbf{g}}_H^{(t)}]
+= \|\nabla f(\mathbf{x}_t)\|^2$.
+\begin{equation}
+    \E_t\!\left[\nabla f(\mathbf{x}_t)^T \bar{\mathbf{g}}_H^{(t)}\right] = \|\nabla f(\mathbf{x}_t)\|^2.
+    \label{eq:progress_term}
+\end{equation}
+\subsection{Conditional Expectation of the Entire Recursion}
+
+Taking conditional expectation $\E_t[\cdot]$ of \eqref{eq:all_bounds}
+(where $B_t$ is treated as fixed for round $t$ as it is already computed):
+\begin{align}
+    \E_t[f(\mathbf{x}_{t+1})] &\leq f(\mathbf{x}_t) - \eta_t\|\nabla f(\mathbf{x}_t)\|^2
+    + \eta_t\|\nabla f(\mathbf{x}_t)\|\, B_t \nonumber\\
+    &\quad + \frac{L}{2}\eta_t^2\, \E_t\!\left[\|\bar{\mathbf{g}}_H^{(t)}\|^2\right]
+    + L\eta_t^2 B_t\, \E_t\!\left[\|\bar{\mathbf{g}}_H^{(t)}\|\right]
+    + \frac{L}{2}\eta_t^2 B_t^2.
+    \label{eq:cond_expect}
+\end{align}
+\subsection{Bounding the Remaining Honest Gradient Moments}
+
+Define the stochastic noise: $\delta_t = \bar{\mathbf{g}}_H^{(t)} - \nabla f(\mathbf{x}_t)$.
+Rearranging: $\bar{\mathbf{g}}_H^{(t)} = \nabla f(\mathbf{x}_t) + \delta_t$.
+
+\textbf{Bounding $\E_t[\|\bar{\mathbf{g}}_H^{(t)}\|^2]$}:
+\[
+    \|\bar{\mathbf{g}}_H^{(t)}\|^2 = \|\nabla f(\mathbf{x}_t) + \delta_t\|^2
+    = \|\nabla f(\mathbf{x}_t)\|^2 + 2\nabla f(\mathbf{x}_t)^T\delta_t + \|\delta_t\|^2.
+\]
+Taking expectation and using $\E_t[\delta_t] = 0$ (unbiasedness):
+\begin{equation}
+    \E_t\!\left[\|\bar{\mathbf{g}}_H^{(t)}\|^2\right] \;\leq\; \|\nabla f(\mathbf{x}_t)\|^2 + \sigma_H^2.
+    \label{eq:second_moment}
+\end{equation}
+\textbf{Bounding $\E_t[\|\bar{\mathbf{g}}_H^{(t)}\|]$}:
+By Jensen's inequality $(\E[X])^2 \leq \E[X^2]$:
+\begin{equation}
+    \E_t\!\left[\|\bar{\mathbf{g}}_H^{(t)}\|\right] \;\leq\; \sqrt{\|\nabla f(\mathbf{x}_t)\|^2 + \sigma_H^2}.
+    \label{eq:first_moment}
+\end{equation}
+\subsection{Aegis Convergence Inequality}
+
+Substituting \eqref{eq:second_moment} and \eqref{eq:first_moment} into \eqref{eq:cond_expect}:
+\begin{align}
+    \E_t[f(\mathbf{x}_{t+1})] &\leq f(\mathbf{x}_t)
+    + \left(-\eta_t + \frac{L}{2}\eta_t^2\right)\|\nabla f(\mathbf{x}_t)\|^2
+    + \eta_t\|\nabla f(\mathbf{x}_t)\|\, B_t \nonumber\\
+    &\quad + L\eta_t^2 B_t\sqrt{\|\nabla f(\mathbf{x}_t)\|^2 + \sigma_H^2}
+    + \frac{L}{2}\eta_t^2\sigma_H^2
+    + \frac{L}{2}\eta_t^2 B_t^2.
+    \label{eq:pre_youngs}
+\end{align}
+\textbf{Applying Young's inequality} to the cross terms:
+
+For $\eta_t\|\nabla f(\mathbf{x}_t)\|\, B_t$, using $ab \leq \frac{1}{2}a^2 + \frac{1}{2}b^2$
+with $a = \|\nabla f(\mathbf{x}_t)\|$ and $b = B_t$:
+\[
+    \eta_t\|\nabla f(\mathbf{x}_t)\| B_t \leq \frac{\eta_t}{2}\|\nabla f(\mathbf{x}_t)\|^2 + \frac{\eta_t}{2} B_t^2.
+\]
+For $L\eta_t^2 B_t\sqrt{\|\nabla f(\mathbf{x}_t)\|^2 + \sigma_H^2}$, again by Young's inequality:
+\[
+    L\eta_t^2 B_t\sqrt{\|\nabla f(\mathbf{x}_t)\|^2 + \sigma_H^2}
+    \leq L\eta_t^2\left(\frac{1}{2}B_t^2 + \frac{1}{2}(\|\nabla f(\mathbf{x}_t)\|^2 + \sigma_H^2)\right).
+\]
+Substituting both bounds and collecting terms:
+\begin{itemize}
+    \item Gradient squared terms: $\left(-\frac{\eta_t}{2} + L\eta_t^2\right)\|\nabla f(\mathbf{x}_t)\|^2$,
+    \item Variance terms: $L\eta_t^2\sigma_H^2$,
+    \item $B_t^2$ terms: $\left(\frac{\eta_t}{2} + L\eta_t^2\right) B_t^2$.
+\end{itemize}
+
+\begin{theorem}[\textbf{One-Step Aegis Convergence Inequality}]
+\hfill \\\label{thm:one_step}
+Under Assumptions~A1--A12, with $0 < \eta_t < 1/(2L)$:
+\begin{equation}
+\boxed{
+\begin{aligned}
+    \E_t[f(\mathbf{x}_{t+1})] &\leq f(\mathbf{x}_t)
+    - \eta_t\left(\frac{1}{2} - L\eta_t\right)\|\nabla f(\mathbf{x}_t)\|^2 \\
+    &\quad + L\eta_t^2\,\sigma_H^2
+    + \left(\frac{\eta_t}{2} + L\eta_t^2\right) B_t^2.
+\end{aligned}
+}
+\label{eq:one_step}
+\end{equation}
+Here:
+\begin{itemize}
+    \item $-\eta_t(\frac{1}{2} - L\eta_t)\|\nabla f(\mathbf{x}_t)\|^2$ is the \textbf{descent term} (negative, driving convergence as long as $\eta_t < 1/(2L)$),
+    \item $L\eta_t^2\sigma_H^2$ is the \textbf{honest SGD noise},
+    \item $(\frac{\eta_t}{2} + L\eta_t^2) B_t^2$ is the \textbf{Aegis penalty} from Byzantine leakage and honest distortion.
+\end{itemize}
+\end{theorem}
+
+\subsection{Bounding \texorpdfstring{$B_t^2$}{B\_t\textasciicircum 2} via the Robustness Certificate}
+
+Recall $B_t = (1+w_B)\sqrt{\kappa_H V_H} + \frac{\sum_{b \in B_A}\widetilde{V}_b}{S} + w_B\Delta_m$.
+
+Using $(A + B + C)^2 \leq 3(A^2 + B^2 + C^2)$:
+
+Let $\kappa_A = 3(1+w_B)^2\kappa_H$ and
+$\zeta_A = 3\left(\frac{\sum_{b \in B_A}\widetilde{V}_b}{S}\right)^2 + 3 w_B^2\Delta_m^2$.
+Then:
+\begin{equation}
+    \boxed{\|\hat{\mathbf{g}}_t - \bar{\mathbf{g}}_H\|^2 = B_t^2 \;\leq\; \kappa_A V_H + \zeta_A.}
+    \label{eq:Bt_squared}
+\end{equation}
+Using the bound \eqref{eq:wB_bound} on $w_B$, let $k = |H_A| + |B_A|$ and
+$f_A = |B_A|/k$ (fraction of approved clients that are Byzantine). Then:
+\[
+    w_B \leq \frac{f_A\, r}{(1-f_A) + f_A r},
+\]
+and:
+\begin{equation}
+    \kappa_A \;\leq\; 3\left(1 + \frac{f_A\,r}{(1-f_A) + f_A\,r}\right)^2 \kappa_H.
+    \label{eq:kappaA_bound}
+\end{equation}
+\begin{remark}[Interpretation]
+\begin{itemize}
+    \item When no attack: $|B_A| = 0 \Rightarrow \kappa_A \leq 3\kappa_H$ (baseline Aegis distortion).
+    \item When weak attack: $r \to 0 \Rightarrow \kappa_A \to 3\kappa_H$ (score suppression eliminates Byzantine influence).
+    \item When strong attack: $r \to 1$, $\kappa_A$ grows, and attackers become indistinguishable from honest clients.
+\end{itemize}
+\end{remark}
+
+\subsection{Bounding \texorpdfstring{$\zeta_A$}{zeta\_A}}
+
+$\zeta_A = \zeta_{\text{vol}} + \zeta_{\text{med}}$ where:
+
+\textbf{Volume leakage bound}: Since $\widetilde{V}_b \leq 2M$:
+\begin{equation}
+    \zeta_{\text{vol}} = 3\left(\frac{\sum_{b \in B_A}\widetilde{V}_b}{S}\right)^2
+    \;\leq\; \frac{12\, M^2\, |B_A|^2}{S^2}.
+    \label{eq:zeta_vol}
+\end{equation}
+\textbf{Median contamination bound}:
+\begin{equation}
+    \zeta_{\text{med}} = 3 w_B^2 \Delta_m^2
+    \;\leq\; 3\left(\frac{f_A\,r}{(1-f_A) + f_A\,r}\right)^2 \Delta_m^2.
+    \label{eq:zeta_med}
+\end{equation}
+\subsection{Combining: Aegis Robustness + SGD}
+
+Substituting \eqref{eq:Bt_squared} into the one-step inequality \eqref{eq:one_step}:
+\begin{align}
+    \E_t[f(\mathbf{x}_{t+1})] &\leq f(\mathbf{x}_t)
+    - \eta_t\left(\frac{1}{2} - L\eta_t\right)\|\nabla f(\mathbf{x}_t)\|^2
+    + L\eta_t^2\sigma_H^2 \nonumber\\
+    &\quad + \left(\frac{\eta_t}{2} + L\eta_t^2\right)\kappa_A V_H
+    + \left(\frac{\eta_t}{2} + L\eta_t^2\right)\zeta_A.
+    \label{eq:combined}
+\end{align}
+For convergence we require:
+\[
+    -\frac{\eta_t}{2} + L\eta_t^2 \leq 0
+    \quad\Longleftrightarrow\quad
+    \eta_t\left(L\eta_t - \frac{1}{2}\right) \leq 0
+    \quad\Longleftrightarrow\quad
+    0 < \eta_t < \frac{1}{2L}.
+\]
+%==================================================================
+\section{Telescoping and Final Convergence Theorem}
+\label{app:telescoping}
+%==================================================================
+
+Taking total expectation of \eqref{eq:combined}:
+\begin{equation}
+\boxed{
+\begin{aligned}
+    \E[f(\mathbf{x}_{t+1})] &\leq \E[f(\mathbf{x}_t)]
+    - \eta_t\left(\frac{1}{2} - L\eta_t\right)\E\!\left[\|\nabla f(\mathbf{x}_t)\|^2\right]
+    + L\eta_t^2\sigma_H^2 \\
+    &\quad + \left(\frac{\eta_t}{2} + L\eta_t^2\right)\E\!\left[\kappa_A^{(t)} V_H^{(t)}\right]
+    + \left(\frac{\eta_t}{2} + L\eta_t^2\right)\E\!\left[\zeta_A^{(t)}\right].
+\end{aligned}
+}
+    \label{eq:total_expect}
+\end{equation}
+Rearranging:
+\begin{align}
+    \eta_t\left(\frac{1}{2} - L\eta_t\right)\E\!\left[\|\nabla f(\mathbf{x}_t)\|^2\right]
+    &\leq \E[f(\mathbf{x}_t)] - \E[f(\mathbf{x}_{t+1})]
+    + L\eta_t^2\sigma_H^2 \nonumber\\
+    &\quad + \left(\frac{\eta_t}{2} + L\eta_t^2\right)\E\!\left[\kappa_A^{(t)} V_H^{(t)}\right]
+    + \left(\frac{\eta_t}{2} + L\eta_t^2\right)\E\!\left[\zeta_A^{(t)}\right].
+    \label{eq:rearranged}
+\end{align}
+Summing from $t=0$ to $T-1$, the left-hand side telescopes:
+\[
+    \sum_{t=0}^{T-1}\bigl(\E[f(\mathbf{x}_t)] - \E[f(\mathbf{x}_{t+1})]\bigr) = \E[f(\mathbf{x}_0)] - \E[f(\mathbf{x}_T)].
+\]
+Since $\mathbf{x}_0$ is not random: $\E[f(\mathbf{x}_0)] = f(\mathbf{x}_0)$.
+Since $f(\mathbf{x}_T) \geq f^*$: $-\E[f(\mathbf{x}_T)] \leq -f^*$.
+
+\begin{theorem}[\textbf{Aegis Convergence Theorem}]
+\hfill \\\label{thm:convergence}
+Under Assumptions A1--A12, the \aegis{}-aggregated SGD satisfies:
+\begin{equation}
+\boxed{
+\begin{aligned}
+    \sum_{t=0}^{T-1} \eta_t\!\left(\frac{1}{2} - L\eta_t\right) \E\!\left[\|\nabla f(\mathbf{x}_t)\|^2\right]
+    &\leq f(\mathbf{x}_0) - f^*
+    + L\sum_{t=0}^{T-1}\eta_t^2\,\sigma_H^2 \\
+    &\quad + \sum_{t=0}^{T-1}\left(\frac{\eta_t}{2} + L\eta_t^2\right)\E\!\left[\kappa_A^{(t)}\, V_H^{(t)}\right] \\
+    &\quad + \sum_{t=0}^{T-1}\left(\frac{\eta_t}{2} + L\eta_t^2\right)\E\!\left[\zeta_A^{(t)}\right].
+\end{aligned}
+}
+\label{eq:final_convergence}
+\end{equation}
+\end{theorem}
+
+\subsection{Interpretation of the Bound}
+
+The convergence bound \eqref{eq:final_convergence} separates the contributions into four components:
+
+\begin{enumerate}
+    \item \textbf{Optimisation gap}: $f(\mathbf{x}_0) - f^*$ (vanishes as $T \to \infty$ with appropriate $\eta_t$).
+    
+    \item \textbf{SGD noise}: $L\sum_{t}\eta_t^2\sigma_H^2$. The standard irreducible noise floor from stochastic gradient estimation.
+    
+    \item \textbf{Honest heterogeneity penalty}: $\sum_t(\frac{\eta_t}{2} + L\eta_t^2)\E[\kappa_A^{(t)} V_H^{(t)}]$.
+    This term accounts for the variance amplification caused by \aegis{}'s unequal weighting of honest clients. The coefficient $\kappa_A^{(t)}$ depends on:
+    \begin{itemize}
+        \item Honest distortion $\kappa_H$ (how concentrated the Aegis weights are),
+        \item Admitted Byzantine fraction $f_A$,
+        \item Score suppression ratio $r$.
+    \end{itemize}
+    
+    \item \textbf{Residual bias}: $\sum_t(\frac{\eta_t}{2} + L\eta_t^2)\E[\zeta_A^{(t)}]$.
+    This is the persistent accuracy loss from Byzantine submissions that evade \aegis{}'s filter, comprising volume leakage $\zeta_{\text{vol}}$ and median contamination $\zeta_{\text{med}}$.
+\end{enumerate}
+
+\begin{corollary}[\textbf{Convergence under Perfect Filtering}]
+\hfill \\\label{cor:perfect}
+If $|B_A| = 0$ for all rounds (all Byzantine clients are correctly rejected),
+then $w_B = 0$, $\zeta_A = 0$, and $\kappa_A = 3\kappa_H$. The bound reduces to:
+\[
+    \sum_{t=0}^{T-1} \eta_t\!\left(\frac{1}{2} - L\eta_t\right) \E\!\left[\|\nabla f(\mathbf{x}_t)\|^2\right]
+    \leq f(\mathbf{x}_0) - f^*
+    + L\sum_{t}\eta_t^2\sigma_H^2
+    + 3\kappa_H \sum_{t}\left(\frac{\eta_t}{2} + L\eta_t^2\right) V_H^{(t)},
+\]
+recovering the standard non-convex SGD convergence rate with an additional honest heterogeneity term.
+\end{corollary}
+
+\begin{remark}[Role of Score Suppression]
+When the attack is weak, $r \to 0$ and score suppression drives $w_B \to 0$,
+making the Byzantine terms vanish. When the attack is strong and $r \to 1$,
+attackers become indistinguishable from honest clients, and the residual bias
+$\zeta_A$ prevents convergence to the optimum---consistent with empirical
+observations of degraded accuracy under ALIE attacks.
+\end{remark}
+
+\end{document}

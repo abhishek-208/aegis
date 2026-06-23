@@ -1,0 +1,105 @@
+\chapter*{List of Notations}
+\addcontentsline{toc}{chapter}{LIST OF NOTATIONS}
+
+The notation below is consistent with the convergence analysis of
+\cref{app:proofs}. Vectors are set in boldface (e.g.\ $\mathbf{g}_i$,
+$\mathbf{w}$); scalars and scores are set in plain italic.
+
+\vspace{1em}
+\noindent\textbf{Model, Data, and Federated Objective}
+\begin{tabular}{ll}
+$\mathbf{w},\ \mathbf{w}^{(t)}$ & Global model parameters (at round $t$) \\
+$\mathbf{w}_i^{(t)}$ & Local model weights returned by client $i$ \\
+$\mathbf{x}_t$ & Model iterate in the convergence analysis (\cref{app:convergence}) \\
+$\mathbf{g}_i,\ \mathbf{g}_i^{(t)}$ & Client update (gradient delta) of client $i$: $\mathbf{w}_i^{(t)}-\mathbf{w}^{(t)}$ \\
+$d$ & Model parameter dimension \\
+$K$ & Total number of clients \\
+$\mathcal{D}_i$ & Local dataset of client $i$ \\
+$n_i$ & Number of data samples at client $i$ \\
+$S$ & Shards per client in the Label Sharding partition \\
+$C$ & Number of classes \\
+$E$ & Local training epochs per round \\
+$F(\mathbf{w}),\ F_i(\mathbf{w})$ & Global objective and local loss of client $i$ \\
+$F^{*}$ & Minimum value of the objective \\
+$L$ & Lipschitz-smoothness constant \\
+$\eta_t$ & Learning rate at round $t$ \\
+\end{tabular}
+
+\vspace{1em}
+\noindent\textbf{Client Sets and Partitions}
+\begin{tabular}{ll}
+$\mathcal{H},\ \mathcal{B}$ & Sets of honest and Byzantine clients \\
+$h=|\mathcal{H}|,\ f=|\mathcal{B}|$ & Number of honest and Byzantine clients \\
+$f/K$ & Byzantine fraction \\
+$\mathcal{S}^{(t)}$ & Set of clients selected in round $t$ \\
+$S_1$ & Pass-1 survivor set (cosine screen) \\
+$A_t$ & Approved (admitted) client set at round $t$ \\
+$H_A^{(t)},\ B_A^{(t)}$ & Approved honest / Byzantine subsets: $\mathcal{H}\cap A_t$, $\mathcal{B}\cap A_t$ \\
+\end{tabular}
+
+\vspace{1em}
+\noindent\textbf{Gradients and Variance}
+\begin{tabular}{ll}
+$\bar{\mathbf{g}}_H$ & Honest mean update: $\tfrac{1}{h}\sum_{i\in\mathcal{H}}\mathbf{g}_i$ \\
+$\hat{\mathbf{g}},\ \hat{\mathbf{g}}_t$ & \aegis{} aggregate \\
+$\widetilde{\mathbf{g}}_H,\ \widetilde{\mathbf{g}}_B$ & Normalised honest / Byzantine aggregates over $A_t$ \\
+$\mathbf{g}_{\mathrm{byz}}$ & Byzantine (poisoned) update \\
+$\mathbf{e}_t$ & \aegis{} aggregation error: $\hat{\mathbf{g}}_t-\bar{\mathbf{g}}_H$ \\
+$V_H$ & Honest gradient variance: $\tfrac{1}{h}\sum_{i\in\mathcal{H}}\|\mathbf{g}_i-\bar{\mathbf{g}}_H\|^2$ \\
+$\sigma_H^2$ & Uniform bound on the honest gradient variance \\
+$\delta_t$ & Stochastic gradient noise: $\bar{\mathbf{g}}_H^{(t)} - \nabla f(\mathbf{x}_t)$ \\
+$G$ & Bound on the honest update norm \\
+$\mu,\ \sigma$ & Coordinate-wise mean / std of round updates (ALIE) \\
+\end{tabular}
+
+\vspace{1em}
+\noindent\textbf{\aegis{} Scoring and Aggregation}
+\begin{tabular}{ll}
+$\mathbf{m}_1$ & Preliminary coordinate-wise median (Pass~1) \\
+$\mathbf{m}_2$ & Debiased reference median (Pass~2) \\
+$c_i$ & Cosine similarity of $\mathbf{g}_i$ with the median \\
+$\tau$ & Pass-1 cosine threshold \\
+$E_i$ & Euclidean distance between $\mathbf{g}_i$ and $\mathbf{m}_2$ \\
+$P_i$ & Cosine penalty: $1-c_i$ \\
+$R_i$ & Cross-round reputation penalty \\
+$D_i$ & Credit-score denominator \\
+$S_i$ & Credit score of client $i$ \\
+$S_t$ & Total score of approved clients: $\sum_{i \in A_t} S_i^{(t)}$ \\
+$\hat{S}_i,\ w_i^{(t)}$ & Normalised aggregation weight \\
+$v_i$ & Raw client volume \\
+$\widetilde{V}_i$ & Clipped client volume contribution of client $i$ \\
+$M$ & Median of client volumes: $\mathrm{median}(v_j : j \in A_t)$ \\
+$\alpha$ & Cosine penalty weight \\
+$\lambda$ & Reputation penalty weight \\
+$\gamma$ & Reputation EMA decay factor \\
+$\varepsilon$ & Numerical-stability constant \\
+$T^{(t)}$ & Adaptive MAD rejection threshold \\
+$k^{(t)}$ & Adaptive threshold multiplier \\
+$k_{\max},\ k_{\min},\ k_{\text{floor}}$ & Bounds on the adaptive multiplier \\
+$\nu$ & Variance-sensitivity coefficient (Strategy~B) \\
+$\rho^{(t)}$ & Credit-ramp factor \\
+\end{tabular}
+
+\vspace{1em}
+\noindent\textbf{Robustness Certificate and Convergence (\cref{app:proofs})}
+\begin{tabular}{ll}
+$w_H,\ w_B$ & Total honest / Byzantine weight in $A_t$ ($w_H+w_B=1$) \\
+$\Delta_m$ & Median contamination: $\|\mathbf{m}_2-\bar{\mathbf{g}}_H\|$ \\
+$\kappa_H$ & \aegis{}-induced honest-distortion coefficient \\
+$\kappa_A$ & Distortion coefficient in the robustness certificate \\
+$\zeta_A$ & Residual-bias term ($\zeta_{\text{vol}}+\zeta_{\text{med}}$) \\
+$r$ & Byzantine score-advantage ratio \\
+$f_A$ & Approved Byzantine fraction: $|B_A|/(|H_A|+|B_A|)$ \\
+$B_t$ & Upper bound on the aggregation error $\|\mathbf{e}_t\|$ \\
+\end{tabular}
+
+\vspace{1em}
+\noindent\textbf{Attack Parameters}
+\begin{tabular}{ll}
+$s$ & Sign-flip amplification factor ($s>1$) \\
+$z$ & ALIE stealth multiplier \\
+$\varepsilon$ & IPM scale factor (context-distinguished from the stability constant) \\
+$\pi$ & Label permutation (label-flip attack) \\
+$m$ & Sybil identities per attacker \\
+$f_{\text{eff}}$ & Effective Byzantine fraction under Sybil inflation \\
+\end{tabular}

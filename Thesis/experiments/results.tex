@@ -1,0 +1,300 @@
+\documentclass[../main.tex]{subfiles}
+\begin{document}
+
+\chapter{EXPERIMENTAL SETUP AND METHODOLOGY}
+\label{ch:experiments}
+
+In this chapter, we rigorously document the complete experimental apparatus we use to evaluate \aegis{} against the demanding threat models we established in \cref{ch:background}. We extract every single parameter stated in this chapter directly from our simulation codebase (\texttt{config.py}, \texttt{data\_utils.py}, \texttt{client.py}, \texttt{server.py}); we assume or approximate absolutely nothing.
+
+%==================================================================
+\section{Dataset and Non-IID Partition}
+\label{sec:exp_dataset}
+%==================================================================
+
+\subsection{Dataset Justification}
+\label{sec:exp_cifar10}
+
+We select CIFAR-10 \citep{krizhevsky2009learning} as our primary benchmark because it serves as the established standard for multi-class visual recognition under severe distribution shifts. It consists of 60,000 colour images ($32 \times 32$ pixels, 3 channels) partitioned cleanly into 50,000 training samples and 10,000 test samples. These span $C = 10$ mutually exclusive semantic classes: \textit{airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck}.
+
+We explicitly choose CIFAR-10 because its 10-class structure, when violently fragmented by our 4-shard Non-IID partition (detailed below), produces a staggering degree of inter-client statistical heterogeneity. This accurately replicates the challenging reality of federated deployments, where distributed edge nodes specialise in entirely distinct data domains---be it varying geographic regions, distinct user demographics, or unique industrial process conditions. By forcing each participating node to observe only a tiny subset of the class space, we perfectly recreate the specialist data profile of real-world edge devices without requiring access to locked proprietary datasets.
+
+Before training, we carefully normalise the pixel values per channel using the dataset's true empirical statistics:
+\begin{equation}
+    x_{\text{norm}}^{(c)} = \frac{x^{(c)} - \mu_c}{\sigma_c}, \qquad
+    \boldsymbol{\mu} = (0.4914,\; 0.4822,\; 0.4465), \quad
+    \boldsymbol{\sigma} = (0.2023,\; 0.1994,\; 0.2010),
+    \label{eq:cifar_norm}
+\end{equation}
+where $c \in \{R, G, B\}$. Crucially, we apply absolutely no data augmentation during local training. Augmentation naturally introduces erratic, intra-client gradient variance that interacts unpredictably with our adaptive thresholding mechanism, and we choose to isolate and evaluate our geometric filters cleanly.
+
+\subsection{Pathological Non-IID Partition: The 4-Shard Label Sharding Protocol}
+\label{sec:exp_noniid}
+
+While standard FL benchmarks lean on balanced, forgiving IID partitions, these are qualitatively unlike any real heterogeneous deployment. To severely stress-test our system, we intentionally employ \textbf{label sharding}, a pathological Non-IID construction \citep{mcmahan2017communication} that forcefully restricts each client to a painfully narrow slice of the global class distribution.
+
+\textbf{Construction.} Using our pool of $|\mathcal{D}_{train}| = 50{,}000$ and a network of $\nclients = 30$ clients, we define our partitions:
+\begin{equation}
+    N_{\text{shards}} = \nclients \times S = 30 \times 4 = 120, \qquad
+    s = \left\lfloor \frac{|\mathcal{D}_{train}|}{N_{\text{shards}}} \right\rfloor = \left\lfloor \frac{50{,}000}{120} \right\rfloor = 416 \text{ samples/shard.}
+    \label{eq:exp_shard_size}
+\end{equation}
+We first rigidly sort the entire training dataset by class label, tightly grouping all samples of each class together contiguously. We then chop this sorted index array into $N_{\text{shards}} = 120$ contiguous shards. Finally, we randomly permute these 120 shards and neatly hand them out in $\nclients = 30$ disjoint groups of $S = 4$ shards each. Client $i$ constructs its local dataset purely from its assigned 4 shards:
+\begin{equation}
+    \mathcal{D}_i = \bigcup_{j \in \mathcal{F}_i} \text{Shard}_j,
+    \qquad |\mathcal{D}_i| = 4 \times 416 = 1{,}664 \text{ samples},
+    \label{eq:client_dataset}
+\end{equation}
+where $\mathcal{F}_i \subset [120]$ securely holds the 4 shard indices assigned to client $i$.
+
+\textbf{Heterogeneity characterisation.} Because we construct our shards directly from a label-sorted dataset, each individual shard predictably contains samples predominantly drawn from just 1--2 classes. Consequently, a client holding 4 shards observes a maximum of 4 distinct classes. In practice, boundary effects at class transitions often mean a client is overwhelmingly dominated by just 2--3 classes. With $C = 10$ classes and $S = 4$ shards per client, we engineer a punishing \emph{effective class coverage ratio}:
+\begin{equation}
+    \rho_{\text{class}} = \frac{S}{C} = \frac{4}{10} = 0.40.
+    \label{eq:class_coverage}
+\end{equation}
+This confirms that an average client remains totally blind to 60\% of the global class space, perfectly mirroring a hyper-specialised edge node that encounters only a narrow subset of task categories in its local physical domain. We experimentally confirm that the resulting honest gradient variance $\honvar$ (which we defined in \cref{sec:bg_divergence}) explodes to 15--40$\times$ larger than under a balanced IID setup. This deliberately places our partition firmly within the pathological Non-IID regime that reliably breaks traditional median-based Byzantine defences.
+
+%==================================================================
+\section{Attack Injection and Byzantine Parameterisation}
+\label{sec:exp_attacks}
+%==================================================================
+
+\subsection{Fixed Byzantine Client Assignment}
+\label{sec:exp_fixed_byz}
+
+Before firing the first round of each experiment, we permanently select a fixed set of Byzantine clients $\mathcal{B} \subset [\nclients]$ without replacement:
+\begin{equation}
+    f = |\mathcal{B}| \in \{3,\; 6,\; 9,\; 12\}
+    \quad\Longleftrightarrow\quad
+    \frac{f}{\nclients} \in \{0.10,\; 0.20,\; 0.30,\; 0.40\},
+    \label{eq:byz_fraction}
+\end{equation}
+where $f = |\mathcal{B}|$ is the raw number of Byzantine clients, $f/\nclients$ represents the adversarial fraction, and $\nclients = 30$. For our primary baseline comparison table, we strictly use the punishing $f/\nclients = 0.30$ (9 traitors), pushing to $f/\nclients = 0.40$ (12 traitors) only to explore absolute resilience limits. We deliberately fix $\mathcal{B}$ across all rounds to correctly model a realistic persistent-threat scenario, where specific physical nodes in the network suffer a long-term compromise, rather than simulating a random, magically rotating adversary.
+
+Furthermore, we configure these Byzantine clients to strike with a relentless attack probability of $p_{attack} = 1.0$: every single compromised client attacks in every single round in which it is sampled. This rigorously tests the protocol against a worst-case, fully engaged adversary.
+
+\subsection{Coordinated Attack Injection}
+\label{sec:exp_attack_injection}
+
+To implement the attacks, our server's orchestration layer (\texttt{server.py}) intercepts and overwrites the compromised updates \emph{after} local training formally completes but strictly before the aggregation call begins. This accurately simulates an adversary who has seized total control over the compromised node's local software pipeline before the payload is uploaded.
+
+\textbf{Sign-Flip.}
+For each Byzantine client $i \in \mathcal{B}$, we calculate the true honest delta $\locgrad{i} = w_i - \globmod^{(t)}$ and aggressively negate it:
+\begin{equation}
+    \locgrad{byz}^{SF} = -\locgrad{i}.
+    \label{eq:sign_flip_impl}
+\end{equation}
+
+\textbf{Label-Flip.}
+We execute this data-poisoning attack directly during the local training phase by quietly inverting the label of every single sample drawn by the compromised node: $y \leftarrow (C - 1 - y)$. We then allow the node to train normally and submit the structurally poisoned model weights without any further mathematical manipulation.
+
+\textbf{ALIE (A Little Is Enough).}
+Here, we grant the server omniscience to strictly bound the honest population. We compute the exact coordinate-wise mean $\mu$ and standard deviation $\sigma$ across all $\nclients$ currently selected clients. We then construct the precisely poisoned delta:
+\begin{equation}
+    \locgrad{byz}^{ALIE} = \mu - z \cdot \sigma, \qquad z = 1.0,
+    \label{eq:alie_impl}
+\end{equation}
+where we intentionally lock $z = 1.0$ (\texttt{ALIE\_Z = 1.0}). This fixed parameter is decidedly more aggressive than the dynamically adaptive formula originally proposed by \citet{baruch2019little}, deliberately chosen to push our temporal reputation tracking mechanism to its absolute limits.
+
+\textbf{Inner Product Manipulation (IPM).}
+Again utilising an omniscient server capability to extract the perfect coordinate-wise mean $\mu$ over all $\nclients$ clients' deltas, we force every Byzantine client to meticulously submit:
+\begin{equation}
+    \locgrad{byz}^{IPM} = -\varepsilon \cdot \mu, \qquad \varepsilon = 0.5,
+    \label{eq:ipm_impl}
+\end{equation}
+enforced via \texttt{IPM\_EPSILON = 0.5} and \texttt{IPM\_USE\_OMNISCIENT = True}. By hard-coding $\varepsilon = 0.5$, we expertly place the poisoned delta at exactly half the honest mean's physical magnitude---sneaking comfortably beneath the MAD thresholding radar of any single-pass aggregator, while guaranteeing a devastatingly negative inner product against $\mu$.
+
+\textbf{Sybil.}
+To test spatial hijacking, each physical Byzantine client $i \in \mathcal{B}$ silently spawns $m = 2$ Sybil clones (\texttt{NUM\_SYBILS\_PER\_ATTACKER = 2}), achieving this by submitting deep copies of its locally poisoned weights under entirely distinct, spoofed deterministic IDs. This massively inflates the effective Byzantine fraction physically hitting the aggregator:
+\begin{equation}
+    f_{\text{eff}} = \frac{|\mathcal{B}| \times (1 + m)}{\nclients + |\mathcal{B}| \times m} = \frac{9 \times 3}{30 + 9 \times 2} = \frac{27}{48} = 0.5625.
+    \label{eq:sybil_effective_frac}
+\end{equation}
+This matches the threat-model derivation in \cref{eq:sybil_effective}. Even at our nominal $f/\nclients = 0.30$ setting, this explosion easily eclipses the theoretical $f < \nclients/2$ honest majority bound, officially rendering this Sybil flood the absolute hardest attack scenario engineered in our evaluation.
+
+%==================================================================
+\section{Local Training Configuration}
+\label{sec:exp_local_training}
+%==================================================================
+
+Within \texttt{client.py}, we enforce a strict, uniform local training protocol for every node selected in a round:
+\begin{enumerate}
+    \item We seamlessly load the freshly broadcast global model $\globmod^{(t)}$ into the node's local PyTorch instance.
+    \item We initialise a standard Stochastic Gradient Descent (SGD) optimiser to handle the steps:
+    \begin{equation}
+        w \leftarrow w - \eta_t \left(\nabla \mathcal{L}(w; \mathcal{B}_b) + \beta \cdot v_{t-1}\right),
+        \label{eq:sgd_update}
+    \end{equation}
+    firmly applying learning rate $\eta_t$, momentum $\beta = 0.8$, and carrying over the velocity buffer $v_{t-1}$.
+    \item We execute exactly $E = 1$ local epoch over the client's narrow 4-shard data slice $\mathcal{D}_i$, running a batch size of $B = 32$ and optimising the standard Cross-Entropy loss.
+    \item We immediately trigger exponential learning rate decay: $\eta_t = \max(\eta_0 \cdot (0.99)^t,\; \eta_{\min})$, securely anchoring $\eta_0 = 0.01$ and $\eta_{\min} = 10^{-4}$.
+    \item Finally, we extract the resulting model weights $w_i^{(t+1)}$ and reliably return them to the server on the CPU.
+\end{enumerate}
+
+We purposefully enforce $E = 1$ to tightly restrict client drift \citep{kairouz2021advances}. By doing so, we beautifully isolate the core Byzantine filtering challenge, cleanly separating it from the murky convergence artefacts typically introduced when clients run multiple local epochs. At $B = 32$, this neatly yields approximately $\lfloor 1664 / 32 \rfloor = 52$ crisp gradient steps per client, per round.
+
+%==================================================================
+\section{Model Architecture: ImprovedCNN}
+\label{sec:exp_model}
+%==================================================================
+
+For all our experiments, we deploy the \textbf{ImprovedCNN} architecture: a highly robust, custom two-block convolutional network heavily reinforced with GroupNorm normalisation and Dropout regularisation. We fully detail its physical structure in \Cref{tab:model_arch}.
+
+\begin{table}[htbp]
+\centering
+\caption[ImprovedCNN architecture for CIFAR-10]{ImprovedCNN architecture for CIFAR-10. GN: GroupNorm; MP: MaxPool 2$\times$2; DO: Dropout.}
+\label{tab:model_arch}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Layer} & \textbf{Type} & \textbf{Output Shape} & \textbf{Params} \\
+\midrule
+Conv1 + GN + ReLU  & Conv2d(3$\to$32, 3$\times$3)   & $(B, 32, 32, 32)$  & 896     \\
+Conv2 + GN + MP    & Conv2d(32$\to$32, 3$\times$3)  & $(B, 32, 16, 16)$  & 9,248   \\
+Conv3 + GN + ReLU  & Conv2d(32$\to$64, 3$\times$3)  & $(B, 64, 16, 16)$  & 18,496  \\
+Conv4 + GN + MP    & Conv2d(64$\to$64, 3$\times$3)  & $(B, 64, 8, 8)$    & 36,928  \\
+Flatten            & ---                             & $(B, 4096)$        & ---     \\
+FC1 + ReLU         & Linear(4096$\to$256)            & $(B, 256)$         & 1,048,832 \\
+Dropout(0.25)      & ---                             & $(B, 256)$         & ---     \\
+FC2 (logits)       & Linear(256$\to$10)              & $(B, 10)$          & 2,570   \\
+\midrule
+\multicolumn{3}{l}{\textbf{Total trainable parameters}} & \textbf{1,116,970} \\
+\midrule
+\multicolumn{3}{l}{Model dimension (flattened gradient vector)} & $\dimmodel \approx 1.12 \times 10^6$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We explicitly choose GroupNorm (configured with a group size of 2) to systematically replace BatchNorm. This actively severs the highly dangerous interaction between shifting batch statistics and Byzantine updates. If we retained BatchNorm, adversaries could trivially poison the running statistics independently of the weight gradients, silently bypassing our gradient delta $\locgrad{i}$ analysis completely.
+
+%==================================================================
+\section{Client Selection and Round Protocol}
+\label{sec:exp_round_protocol}
+%==================================================================
+
+To begin each round $t$, our server stochastically samples a random subset of available clients:
+\begin{equation}
+    |\mathcal{S}^{(t)}| \sim \mathrm{Uniform}\!\left(\{N_{\min}, \ldots, N_{\max}\}\right), \qquad N_{\min} = 15,\; N_{\max} = 25.
+    \label{eq:client_selection}
+\end{equation}
+We deliberately inject this stochastic selection mechanism to ensure Byzantine clients are never uniformly present in every single round. This powerfully replicates a realistic persistent-threat environment, demanding far more dynamic resilience than a simplistic deterministic full-participation model. Operating at $f/\nclients = 0.30$ across $\nclients = 30$, we accurately project the expected number of Byzantine participants surfacing per round as:
+\begin{equation}
+    \mathbb{E}[|\mathcal{B}^{(t)}|] = |\mathcal{B}| \cdot \frac{\mathbb{E}[|\mathcal{S}^{(t)}|]}{n} = 9 \times \frac{21.5}{30} \approx 6.45,
+    \label{eq:expected_byz}
+\end{equation}
+which reliably maintains an effective per-round Byzantine fraction hovering cleanly around 30\% of the freshly selected pool.
+
+%==================================================================
+\section{Baseline Aggregators}
+\label{sec:exp_baselines}
+%==================================================================
+
+We rigorously benchmark \aegis{} against five established aggregation baselines. We document their exact simulation configurations in \Cref{tab:baselines}.
+
+\begin{table}[htbp]
+\centering
+\caption{Baseline aggregator configurations in our simulation.}
+\label{tab:baselines}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llll}
+\toprule
+\textbf{Aggregator} & \textbf{Byzantine Fraction $f/\nclients$} & \textbf{Selection} & \textbf{Note} \\
+\midrule
+FedAvg \citep{mcmahan2017communication}     & 0.30 & All selected clients & Non-robust baseline \\
+CWMed \citep{yin2018byzantine}              & 0.30 & ---                  & Coord.-wise median \\
+Multi-Krum \citep{blanchard2017machine}     & 0.30 & $\nclients - f - 2$ clients  & Unweighted mean \\
+FoolsGold \citep{fung2020limitations}       & 0.30 & All selected clients & Sybil-specific \\
+Bulyan \citep{mhamdi2018hidden}             & 0.20 & $\nclients - 2f$ Krum-selected & Requires $\nclients \geq 4f+3$ \\
+\textbf{\aegis{} (this work)}               & 0.30 & Adaptive $\mathcal{A}$ & Full pipeline \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+We uniquely evaluate Bulyan at the reduced $f/\nclients = 0.20$ tier because its strict Byzantine tolerance constraint ($\nclients \geq 4f + 3$) violently shatters at $f/\nclients = 0.30$. Specifically, with $f = 9$, the constraint fails because $30 \ngeq 4(9) + 3 = 39$. However, at $f/\nclients = 0.20$ ($f = |\mathcal{B}| = 6$), the logic holds as $30 \geq 4(6) + 3 = 27$. This restrictive mathematical shackle happily does not apply to \aegis{}, Multi-Krum, CWMed, or FoolsGold.
+
+%==================================================================
+\section{Evaluation Protocol}
+\label{sec:exp_eval}
+%==================================================================
+
+To track performance, we comprehensively evaluate our global model at the immediate close of every round using the securely held-out test set of 10,000 samples (\texttt{EVALUATE\_EVERY\_N\_ROUNDS = 1}). We actively report both the top-1 classification accuracy and the Cross-Entropy loss. This evaluation runs cleanly through the test dataloader at a rapid batch size of 1024, forcefully stripping all gradient computation to maximise speed.
+
+We implement early stopping by enforcing a patience horizon of $P = 100$ rounds alongside a minimum improvement threshold of $\delta = 0.001$ strictly on the validation loss. If the loss plateaus and fails to improve by $\delta$ for $P$ consecutive rounds, we definitively halt the training. Crucially, we always report the \emph{best model accuracy} as the absolute peak accuracy achieved right before the final loss degradation triggers, rather than simply grabbing the terminal accuracy at round 1000.
+
+To guarantee absolute reproducibility, we hard-code the random seed (\texttt{RANDOM\_SEED = 42}) identically across NumPy, Python's native \texttt{random}, PyTorch CPU, and PyTorch CUDA before launching any experiment. We wipe the slate clean by re-sampling the Byzantine client assignments from scratch at the dawn of each run. Furthermore, we actively purge all aggregator states (including \aegis{} reputation scores and FoolsGold gradient history logs) between experiments to eliminate any possibility of cross-contamination.
+
+%==================================================================
+\section{Computing Infrastructure}
+\label{sec:exp_infrastructure}
+%==================================================================
+
+We execute all our local development and rapid ablation runs on a Windows~11 workstation fully equipped with CUDA-enabled GPU acceleration (\texttt{torch.device('cuda')}). For our massive, large-scale comparison runs, we deploy directly onto Modal cloud compute infrastructure. By utilising Modal's persistent volume mounts, we secure lightning-fast, I/O-efficient dataset access without bleeding time on per-experiment download overheads. While our simulation officially supports both a GPU-serial mode (\texttt{MAX\_PARALLEL\_CLIENTS = 1}) and a hyper-fast GPU-parallel mode (via \texttt{concurrent.futures.ThreadPoolExecutor}), we intentionally execute all formally reported results strictly in serial mode. This strategically eliminates any trace of GPU thread-scheduling variance from our final timing measurements.
+
+To securely capture all round-level telemetry, we pipe the output through a \texttt{Tee} multiplexer that seamlessly streams the data to both stdout and a permanent timestamped log file nestled in \texttt{config.RESULTS\_DIR}, guaranteeing zero diagnostic data loss during our gruelling multi-hour runs.
+
+%==================================================================
+\section{Full Hyperparameter Configuration}
+\label{sec:exp_hyperparams}
+%==================================================================
+
+In \Cref{tab:full_hyperparams}, we lay out the exhaustive hyperparameter configuration that drives the primary evaluation reported in \cref{ch:results}. We pull every single value listed here directly from our \texttt{config.py} and meticulously cross-verify it against the raw simulation logs.
+
+\begin{table}[htbp]
+\centering
+\caption{Complete hyperparameter configuration for the primary evaluation.}
+\label{tab:full_hyperparams}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llll}
+\toprule
+\textbf{Category} & \textbf{Parameter} & \textbf{Value} & \textbf{Source variable} \\
+\midrule
+\multicolumn{4}{l}{\textit{Federated Learning Protocol}} \\
+& Communication rounds       & 1000               & \texttt{NUM\_ROUNDS} \\
+& Total clients              & 30                 & \texttt{NUM\_CLIENTS} \\
+& Clients per round (min)    & 15                 & \texttt{MIN\_CLIENTS\_PER\_ROUND} \\
+& Clients per round (max)    & 25                 & \texttt{MAX\_CLIENTS\_PER\_ROUND} \\
+& Local epochs               & 1                  & \texttt{LOCAL\_EPOCHS} \\
+& Batch size                 & 32                 & \texttt{BATCH\_SIZE} \\
+& Initial learning rate      & 0.01               & \texttt{LEARNING\_RATE} \\
+& SGD momentum               & 0.8                & \texttt{MOMENTUM} \\
+& LR decay rate              & 0.99/round         & \texttt{LR\_DECAY\_RATE} \\
+& Minimum LR                 & $10^{-4}$          & \texttt{MIN\_LR} \\
+& Random seed                & 42                 & \texttt{RANDOM\_SEED} \\
+\addlinespace
+\multicolumn{4}{l}{\textit{Data Configuration}} \\
+& Dataset                    & CIFAR-10           & \texttt{DATASET\_NAME} \\
+& Partition strategy         & Label Sharding     & \texttt{DATA\_SPLIT\_TYPE} \\
+& Shards per client          & 4                  & \texttt{SHARDS\_PER\_CLIENT} \\
+& Training samples           & 50,000             & --- \\
+& Test samples               & 10,000             & --- \\
+\addlinespace
+\multicolumn{4}{l}{\textit{Attack Configuration}} \\
+& Primary Byzantine fraction & 0.30               & \texttt{FRACTION\_BYZANTINE} \\
+& Resilience-limit fraction  & 0.40               & ablation sweep \\
+& Attack probability         & 1.0                & \texttt{ATTACK\_PROBABILITY} \\
+& IPM scaling factor $\varepsilon$ & 0.5         & \texttt{IPM\_EPSILON} \\
+& ALIE $z$ parameter         & 1.0                & \texttt{ALIE\_Z} \\
+& Sybil clones per attacker  & 2                  & \texttt{NUM\_SYBILS\_PER\_ATTACKER} \\
+\addlinespace
+\multicolumn{4}{l}{\textit{\aegis{} Aggregation Parameters}} \\
+& Pass 1 cosine threshold $\taucosine$ & $-0.3$  & \texttt{PASS1\_COS\_THRESHOLD} \\
+& Adaptive $k_{\max}$        & 6.0                & \texttt{K\_MAX} \\
+& Adaptive $k_{\min}$ (decay target) & 2.0       & \texttt{K\_MIN} \\
+& Effective $k_{\text{floor}}$ (Non-IID) & 4.0    & \texttt{K\_SAFE\_FLOOR} \\
+& Warmup horizon $T_{\text{warm}}$ & 300 rounds  & \texttt{WARMUP\_ROUNDS} \\
+& Variance sensitivity $\nu$ & 3.0               & \texttt{VARIANCE\_SENSITIVITY} \\
+& Cosine penalty weight $\alpha$ & 30.0          & \texttt{COSINE\_PENALTY\_WEIGHT} \\
+& Reputation EMA decay $\gamma$ & 0.95           & \texttt{REPUTATION\_DECAY} \\
+& Reputation penalty weight $\lambda$ & 20.0     & \texttt{REPUTATION\_WEIGHT} \\
+& Credit warmup $T_{\text{cr}}$ & 100 rounds     & \texttt{CREDIT\_WARMUP\_ROUNDS} \\
+& Numerical stability $\varepsilon$ & $10^{-9}$  & \texttt{RWA\_EPSILON} \\
+\addlinespace
+\multicolumn{4}{l}{\textit{Evaluation}} \\
+& Evaluation frequency       & Every round        & \texttt{EVALUATE\_EVERY\_N\_ROUNDS} \\
+& Early stopping patience    & 100 rounds         & \texttt{PATIENCE} \\
+& Early stopping $\delta$    & 0.001              & \texttt{MIN\_DELTA} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\end{document}

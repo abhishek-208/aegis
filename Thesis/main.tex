@@ -1,0 +1,374 @@
+% =====================================================================
+%  AEGIS — MTech Thesis, IIT Delhi
+%  main.tex: Master skeleton (do not write chapter content here)
+% =====================================================================
+\documentclass[MTech]{iitddiss}
+
+% ------------------------------------------------------------------
+% ENCODING & FONTS
+% NOTE: iitddiss loads graphicx, setspace, caption automatically.
+% ------------------------------------------------------------------
+\usepackage[utf8]{inputenc}        % FIX: was \usepackage[utf8]{inputenc,xcolor}
+\usepackage[T1]{fontenc}           % Modern form of t1enc
+\usepackage{lmodern}               % Latin Modern: scalable successor to Computer Modern
+                                   % eliminates bitmap .pk font warnings; same visual style
+% Bold small caps: Latin Modern Roman provides no bold small-caps shape at all,
+% so \textsc inside bold (e.g. \aegis in a bold heading/table cell) triggers an
+% "undefined font shape" substitution warning. Map bx/sc -> bx/n (bold upright,
+% which exists) so bold contexts render in bold and the warning is silenced.
+% Deferred to \AtBeginDocument because T1/lmr is only registered after lmodern.
+\AtBeginDocument{\DeclareFontShape{T1}{lmr}{bx}{sc}{<->ssub*lmr/bx/n}{}}
+\usepackage[protrusion=true,expansion=true,final]{microtype} % full microtypography now safe
+\usepackage{indentfirst}           % Indent the first line of all paragraphs (even after headings)
+
+% ------------------------------------------------------------------
+% COLOR
+% ------------------------------------------------------------------
+\usepackage[dvipsnames,svgnames,table]{xcolor}
+
+% ------------------------------------------------------------------
+% MATHEMATICS
+% ------------------------------------------------------------------
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{mathtools}             % Extends amsmath (dcases, coloneqq, etc.)
+\usepackage{bm}                    % Bold math symbols (\bm)
+
+% ------------------------------------------------------------------
+% FIGURES & GRAPHICS
+% (graphicx already loaded by iitddiss.cls — no duplicate needed)
+% ------------------------------------------------------------------
+\usepackage{float}
+\usepackage{subcaption}            % Subfigures with \subcaptionbox
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc}
+\usepackage{etoolbox}              % \patchcmd — used to inject the IITD logo into \maketitle
+\graphicspath{{images/}{figures/}} % search dirs for \includegraphics
+
+% ------------------------------------------------------------------
+% TITLE-PAGE LOGO
+% The title page is built by \maketitle (defined in iitddiss.cls), which
+% reserves a blank 1.5in slot for the institute logo. We fill that slot
+% here — from main.tex — by patching the placeholder \vspace with the
+% IITD logo, keeping the title page to a single page.
+%
+% IMPORTANT: this patch MUST run BEFORE hyperref is loaded. hyperref
+% wraps \maketitle, which moves the \vspace*{1.5in} placeholder out of
+% the directly-patchable macro body and makes the patch fail.
+%
+% The filename contains dots (".svg.png"), so the dotted base name is
+% brace-wrapped and the real extension given explicitly, per graphicx.
+% ------------------------------------------------------------------
+\makeatletter
+\patchcmd{\maketitle}%
+  {\vspace*{1.5in}}%
+  {\begin{center}%
+     \includegraphics[height=1.3in,keepaspectratio]%
+       {{Indian_Institute_of_Technology_Delhi_Logo.svg}.png}%
+   \end{center}%
+   \vspace*{0.15in}}%
+  {}%
+  {\GenericWarning{}{main.tex: IITD logo patch into \string\maketitle\space FAILED}}%
+\makeatother
+
+% ------------------------------------------------------------------
+% TABLES
+% ------------------------------------------------------------------
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{siunitx}               % Aligned decimal columns in tables
+
+% ------------------------------------------------------------------
+% ALGORITHMS  (FIX: algorithmic replaced by algpseudocode)
+% ------------------------------------------------------------------
+\usepackage{algorithm}
+\usepackage{algpseudocode}         % From algorithmicx; modern & extensible
+
+% ------------------------------------------------------------------
+% BIBLIOGRAPHY
+% (iitddiss.cls calls \bibliographystyle{alpha} internally;
+%  the line below overrides it to author-year, standard for EE/CS.)
+% ------------------------------------------------------------------
+\usepackage[numbers,sort&compress]{natbib}
+\bibliographystyle{plainnat}
+
+% ------------------------------------------------------------------
+% LANGUAGE
+% ------------------------------------------------------------------
+\usepackage[english]{babel}
+
+% ------------------------------------------------------------------
+% SUBFILES  (lets each chapter compile independently)
+% ------------------------------------------------------------------
+\usepackage{subfiles}
+\providecommand{\main}{.}          % Relative path to this file
+\providecommand{\cwd}{.}           % Overridden by each subfile
+
+% ------------------------------------------------------------------
+% HEADER / FOOTER  (iitddiss does not set body-page headers)
+% ------------------------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\renewcommand{\sectionmark}[1]{\markright{\thesection\ #1}}
+\fancyhf{}
+\rhead{\fancyplain{}{\thepage}}
+\lhead{\fancyplain{}{\rightmark}}
+\cfoot{\textcopyright\ \the\year,\ \emph{Indian Institute of Technology Delhi}}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% ------------------------------------------------------------------
+% HYPERREF  — must be loaded NEAR LAST
+% ------------------------------------------------------------------
+% Visual options only — metadata moved to \hypersetup to avoid keyval
+% comma-splitting bug (each comma in a value is misread as a new key).
+\usepackage[
+    colorlinks       = true,
+    linkcolor        = {red!70!black},
+    citecolor        = {green!50!black},
+    urlcolor         = cyan,
+    bookmarks        = true,
+    bookmarksnumbered= true
+]{hyperref}
+
+\hypersetup{
+    pdftitle    = {Aegis: A Byzantine-Resilient Federated Learning Protocol},
+    pdfauthor   = {Abhishek Kumar Tripathi},
+    pdfsubject  = {MTech Thesis, IIT Delhi},
+    pdfkeywords = {Federated Learning, Byzantine Resilience, Aegis, Inner Product Manipulation, Sybil Attack}
+}
+
+% cleveref MUST come after hyperref
+\usepackage[capitalize, noabbrev]{cleveref}
+
+% bookmark (loaded after hyperref) rebuilds the PDF outline robustly from the
+% .out file, so bookmarks appear reliably and the "main.out has changed — rerun
+% to get outlines right" warning is resolved.
+\usepackage{bookmark}
+
+% ------------------------------------------------------------------
+% REMOVE DOTTED LEADERS from ToC / List of Tables / List of Figures
+% \@dotsep controls the spacing between the leader dots in entries
+% drawn by \@dottedtocline. Setting it to a very large value pushes
+% the dots infinitely apart, so none are rendered.
+% ------------------------------------------------------------------
+\makeatletter
+\renewcommand{\@dotsep}{10000}
+\makeatother
+
+% ------------------------------------------------------------------
+% THEOREM / DEFINITION ENVIRONMENTS
+%
+% All environments share a SINGLE running number (Theorem 1, Lemma 2,
+% Assumption 3, ...). Naively sharing the [theorem] counter via
+% \newtheorem{x}[theorem]{X} makes cleveref label every reference "Theorem"
+% (it keys names off the counter, whose first environment is "theorem").
+% thmtools' "sibling=theorem" shares the running number while "name=" registers
+% the correct cleveref word per environment (Assumption, Lemma, ...). This is
+% the amsthm-compatible replacement for the aliascnt trick, which clashes with
+% amsthm's guarded \newcounter ("\c@lemma already defined").
+% ------------------------------------------------------------------
+\usepackage{thmtools}
+
+\theoremstyle{plain}
+\declaretheorem[name=Theorem, numberwithin=chapter]{theorem}
+\declaretheorem[name=Lemma,       sibling=theorem]{lemma}
+\declaretheorem[name=Corollary,   sibling=theorem]{corollary}
+\declaretheorem[name=Proposition, sibling=theorem]{proposition}
+
+\theoremstyle{definition}
+\declaretheorem[name=Definition,  sibling=theorem]{definition}
+\declaretheorem[name=Assumption,  sibling=theorem]{assumption}
+\declaretheorem[name=Problem,     sibling=theorem]{problem}
+
+\theoremstyle{remark}
+\declaretheorem[name=Remark,      sibling=theorem]{remark}
+\declaretheorem[name=Example,     sibling=theorem]{example}
+
+% cleveref has no built-in names for the non-standard "assumption"/"problem"
+% types (and thmtools' name= does not propagate to cleveref), so register the
+% reference words explicitly. The [capitalize] option handles \cref vs \Cref.
+\crefname{theorem}{Theorem}{Theorems}
+\crefname{lemma}{Lemma}{Lemmas}
+\crefname{corollary}{Corollary}{Corollaries}
+\crefname{proposition}{Proposition}{Propositions}
+\crefname{definition}{Definition}{Definitions}
+\crefname{assumption}{Assumption}{Assumptions}
+\crefname{problem}{Problem}{Problems}
+\crefname{remark}{Remark}{Remarks}
+\crefname{example}{Example}{Examples}
+
+% ------------------------------------------------------------------
+% CUSTOM MACROS — Aegis / FL domain notation
+% ------------------------------------------------------------------
+
+% System / protocol names — \textup prevents scit (small-caps italic) shape errors
+% when macros appear inside \emph{} or bold headings; \texorpdfstring avoids
+% PDF bookmark warnings when used in section titles.
+\newcommand{\aegis}{\texorpdfstring{\textup{\textsc{Aegis}}}{Aegis}}
+
+% Federated Learning shorthands
+\newcommand{\FL}{Federated Learning}
+% \textup guards against the missing small-caps-italic (scit) shape when these
+% macros appear inside \emph{} or italic running headers (same fix as \aegis).
+\newcommand{\ipm}{\textup{\textsc{IPM}}}               % Inner Product Manipulation
+\newcommand{\fedavg}{\textup{\textsc{FedAvg}}}
+
+% Math — sets and spaces
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\E}{\mathbb{E}}                   % Expectation
+
+% Math — operators
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Med}{Med}               % Coordinate-wise median
+\DeclareMathOperator{\clip}{clip}
+\DeclareMathOperator{\sign}{sign}
+\DeclareMathOperator{\diag}{diag}
+
+% Math — norms and inner products
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\normsq}[1]{\left\lVert #1 \right\rVert^{2}}
+\newcommand{\inner}[2]{\left\langle #1,\, #2 \right\rangle}
+\newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
+
+% Math — complexity / O-notation
+\newcommand{\Ocal}[1]{\mathcal{O}\!\left(#1\right)}
+
+% FL system parameters  (notation matched to Appendix A convergence proof)
+\newcommand{\nclients}{K}                     % Total number of clients (App. A: K)
+\newcommand{\bclients}{f}                     % Number of Byzantine clients, f = |B| (App. A)
+\newcommand{\globmod}{\mathbf{w}}             % Global model parameters
+\newcommand{\locgrad}[1]{\mathbf{g}_{#1}}    % Client update vector (gradient delta) of client i
+\newcommand{\agggrad}{\hat{\mathbf{g}}}       % Aegis aggregate (App. A: \hat{g}_t)
+\newcommand{\honmean}{\bar{\mathbf{g}}_{H}}   % Honest mean update (App. A: \bar{g}_H)
+\newcommand{\honvar}{V_{H}}                   % Honest gradient variance (App. A: V_H)
+\newcommand{\dimmodel}{d}                     % Model parameter dimension
+\newcommand{\kfilter}{k}                      % Aegis adaptive-threshold multiplier k^{(t)}
+
+% Aegis-specific thresholds
+\newcommand{\taucosine}{\tau}                 % Pass-1 cosine threshold (App. A: \tau)
+\newcommand{\tauvar}{\tau_{\sigma}}           % Variance threshold
+
+% Median references (App. A: m_1 preliminary, m_2 debiased) -- bold vectors
+\newcommand{\medone}{\mathbf{m}_{1}}          % Pass-1 preliminary median
+\newcommand{\medtwo}{\mathbf{m}_{2}}          % Pass-2 debiased reference median
+
+% Convenience: Byzantine
+\newcommand{\byz}{Byzantine}
+
+% =====================================================================
+%  DOCUMENT BEGIN
+% =====================================================================
+\begin{document}
+
+% ------------------------------------------------------------------
+% TITLE PAGE
+% Fields: fill in advisor name and entry number before submission
+% ------------------------------------------------------------------
+\title{Aegis: A Byzantine-Resilient\\
+       Federated Learning Protocol}
+
+\author{Abhishek Kumar Tripathi}
+\advisor{Prof. Harshan Jagadeesh,\\
+         Indian Institute of Technology Delhi}
+\entrynumber{2024EET2845}
+\date{June 2026}
+\department{Electrical Engineering}
+
+\maketitle
+
+% ------------------------------------------------------------------
+% FRONT MATTER  (roman page numbers set by \maketitle above)
+% ------------------------------------------------------------------
+\input{nonindex/certificate}
+\input{nonindex/acknowledgements}
+\subfile{\cwd/nonindex/abstract}
+
+% ------------------------------------------------------------------
+% NAVIGATIONAL LISTS  (single-spaced per IITD convention)
+% ------------------------------------------------------------------
+\begin{singlespace}
+\tableofcontents
+\thispagestyle{empty}
+
+\listoftables
+\addcontentsline{toc}{chapter}{LIST OF TABLES}
+
+\listoffigures
+\addcontentsline{toc}{chapter}{LIST OF FIGURES}
+\end{singlespace}
+
+\input{nonindex/abrv}
+\input{nonindex/notations}
+
+% ------------------------------------------------------------------
+% Switch to arabic numbering for the main body
+% ------------------------------------------------------------------
+\cleardoublepage
+\pagenumbering{arabic}
+
+% ==================================================================
+%  BODY CHAPTERS
+%
+%  Chapter 1 — Introduction
+%  Chapter 2 — Background & Threat Model
+%  Chapter 3 — The Aegis Protocol: Architecture & Design
+%  Chapter 4 — Experimental Evaluation
+%  Chapter 5 — Ablation Studies
+%  Chapter 6 — Conclusion & Future Work
+% ==================================================================
+
+\subfile{\cwd/intro/intro.tex}
+% Ch 1: Motivation, problem statement, contributions, thesis map
+
+\subfile{\cwd/background/background.tex}
+% Ch 2: FL foundations, 4-shard label-sharding Non-IID, Byzantine Tax, prior art,
+%        formal threat model, 40% fraction assumption, attack formulations
+
+\subfile{\cwd/methodology/aegis.tex}
+% Ch 3: Aegis overview, Pass-1 cosine screening, Pass-2 median decontamination,
+%        adaptive thresholding, O(kd) complexity, convergence analysis
+
+\subfile{\cwd/experiments/results.tex}
+% Ch 5: Testbed setup, datasets, baselines, per-attack robustness results,
+%        mixed-attack scenarios
+
+\subfile{\cwd/ablation/ablation.tex}
+% Ch 6: Sensitivity to tau_cos, tau_sigma, Byzantine fraction f/n,
+%        adaptive vs. fixed thresholding
+
+\subfile{\cwd/conclusion/conclusion.tex}
+% Ch 7: Summary of contributions, limitations, future directions
+
+% ==================================================================
+%  APPENDICES
+% ==================================================================
+\appendix
+
+% cleveref names appendix chapters "Chapter A" by default because they still
+% use the chapter counter. Retag chapter-counter labels defined from here on
+% as "appendix" type so every \cref to them (including forward references from
+% the body chapters) renders "Appendix A".
+\crefname{appendix}{Appendix}{Appendices}
+\Crefname{appendix}{Appendix}{Appendices}
+\crefalias{chapter}{appendix}
+
+\subfile{\cwd/appendices/appA_convergence.tex}
+% Appendix A: Proof of Convergence Theorem and supporting lemmas
+
+\subfile{\cwd/appendices/appB_hyperparams.tex}
+% Appendix B: Full hyperparameter sweep tables and sensitivity plots
+
+% ==================================================================
+%  BIBLIOGRAPHY
+% ==================================================================
+\begin{singlespace}
+    \bibliography{refs}
+\end{singlespace}
+
+\end{document}

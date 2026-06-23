@@ -14,13 +14,27 @@ MAX_CLIENTS_PER_ROUND = 28   # Maximum clients to select each round
 RANDOM_SEED = 42             # Fixed seed for reproducibility control
 
 # --- === 2. Experiment Toggles === ---
-# Only ONE of the following should be set to True (or both False for manual experiments).
+# Only ONE of the following should be set to True (or all False for manual experiments).
 COMPARE_AEGIS_SCENARIOS =   False    # Set True to run "Aegis vs Baselines" comparison
 RUN_ABLATION_STUDY      =   False         # Set True to run Aegis Ablation Study across components
 ABLATION_NON_IID_SWEEP  =   False     # Set True to sweep over non-IID shards_per_client (2, 4, 6, 10)
 ABLATION_BYZANTINE_SWEEP=   False   # Set True to sweep over fraction of attackers (10%, 20%, 30%, 40%)
+ABLATION_SYBIL_SWEEP    =   True    # Set True to sweep Sybil clones per attacker (1, 2, 3, 4, 5)
+ABLATION_IPM_EPSILON_SWEEP = False   # Set True to sweep IPM epsilon
 MULTI_SEED_EVAL         =   False             # Set True to run 3-seed reproducibility evaluation across attack types
 EVAL_SEEDS              = [42, 123, 456]        # Seeds for multi-seed evaluation
+
+
+# --- Hyperparameter Sensitivity Sweep ---
+ABLATION_PARAM_SWEEP        = False   # Set True to sweep one Aegis hyperparameter across values
+# Which parameter to sweep. Options: 'variance_sensitivity' | 'pass1_cos_threshold' | 'cosine_penalty_weight'
+SWEEP_PARAM                 = 'cosine_penalty_weight'
+PARAM_SWEEP_VALUES = {
+    'variance_sensitivity':  [1.0, 2.0, 3.0, 4.5, 6.0],
+    'pass1_cos_threshold':   [0.0, -0.3, -0.5, -0.7, -1.0],
+    'cosine_penalty_weight': [0.0, 10.0, 20.0, 30.0, 50.0, 80.0],
+}
+SWEEP_COLORS = ['#e74c3c', '#e67e22', '#2ecc71', '#3498db', '#9b59b6', '#1abc9c']
 
 # --- === 3. Data & Model Parameters === ---
 MODEL_TYPE              = 'ImprovedCNN'  # 'MLP' (MNIST), 'CNN' (LeNet-5), 'ImprovedCNN' (CIFAR10)
@@ -44,7 +58,7 @@ SERVER_MOMENTUM_ENABLED = False      # If False, works as standard FL.
 SERVER_MOMENTUM         = 0.7               # FedAvgM momentum parameter (velocity to keep).
 SERVER_LEARNING_RATE    = 1.0          # Server step size.
 
-# --- === 6. Aegis Adaptive Thresholding Parameters === ---
+# --- === 6. Aegis Parameters === ---
 # The rejection cutoff: T = median_distance + (k * MAD)
 ADAPTIVE_THRESHOLD_ENABLED  = True   # Set False to use fixed OUTLIER_SENSITIVITY
 OUTLIER_SENSITIVITY         = 3.0           # Fixed fallback when adaptive is disabled
@@ -60,6 +74,8 @@ PASS1_COS_THRESHOLD         = -0.3           # Pass 1 directional screen thresho
                                     # -0.3 = moderate (catches sign-flip but preserves borderline honest)
                                     # -0.5 = lenient (only catches strongly adversarial)
 COSINE_PENALTY_WEIGHT       = 30.0         # Multiplier α for single-round cosine penalty P_k in credit score
+#For improvement against ALIE, the credit scoring has lesser  impact in initial rounds
+CREDIT_WARMUP_ROUNDS = 100  # Rounds over which full credit scoring ramps up
 RWA_EPSILON                 = 1e-9                  # Numerical stability constant
 
 # --- === 7. FoolsGold Defense Parameters === ---
@@ -74,9 +90,12 @@ REPUTATION_WEIGHT           = 20.0            # Scaling factor λ for reputation
 FRACTION_BYZANTINE          = 0.30           # Ratio of Byzantine clients in the total pool
 
 # Options: 'none', 'sign_flip', 'additive_noise', 'pure_additive_noise', 'catastrophic_noise', 'label_flip', 'orthogonal', 'volume_spam', 'sybil', 'alie', 'ipm'
-ATTACK_TYPE                 = 'alie'
+ATTACK_TYPE                 = 'sybil'
 ATTACK_PROBABILITY          = 1.0            # Probability of a traitor attacking whilst in their window
 ATTACK_NOISE_STD            = 2.0              # Multiplier for additive_noise magnitudes
+
+# Sybil Specifics
+
 NUM_SYBILS_PER_ATTACKER     = 2         # Fake identities per traitor during a Sybil attack
 
 # ALIE Specifics ("A Little Is Enough")
@@ -100,7 +119,7 @@ DATALOADER_WORKERS          = 0              # MUST stay 0 if Multiprocessing cl
 # --- === 10. Evaluation & Early Stopping === ---
 EVALUATE_EVERY_N_ROUNDS     = 1
 EARLY_STOPPING_ENABLED      = True
-PATIENCE = 100                       # Wait time for loss improvement 
+PATIENCE = 50                       # Wait time for loss improvement 
 MIN_DELTA = 0.001                   # Substantial enough loss drop to reset patience
 
 # --- === 11. Output, Visualization & System === ---
@@ -115,6 +134,11 @@ else:
 
 
 VISUALIZE_GRADIENTS         = False         # Master toggle for distance scatters
+PLOT_COMPLEXITY_VERIFICATION = False         # Set False to skip per-experiment complexity verification plots
 VISUALIZE_EVERY_N_ROUNDS    = 10       
 PLOT_SMOOTHING_WEIGHT       = 0.85        # Exponential Moving Average weight (0.0 to 1.0)
 AUTO_SHUTDOWN               = False               # Automatically turn off machine post-run
+
+# --- === 12. Publication Formatting (IEEE) === ---
+SAVE_DPI                    = 600                 # Dots Per Inch for saved plots (300=Draft, 600=Pub)
+IEEE_STYLE_ENABLED          = False                # If True, optimizes layout for 3.5" two-column papers

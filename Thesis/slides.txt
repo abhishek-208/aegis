@@ -1,0 +1,718 @@
+﻿--- Slide 1 ---
+
+
+
+M.TECH THESIS DEFENSE  Â·  INDIAN INSTITUTE OF TECHNOLOGY DELHI
+Enhanced Aegis
+A Byzantine-Resilient Federated Learning Protocol for Drone Swarms
+
+Abhishek Kumar Tripathi    (2024EET2845)
+Advisor:  Prof. Harshan Jagadeesh
+Department of Electrical Engineering, IIT Delhi
+June 2026
+--- Slide 2 ---
+
+AGENDA
+Outline
+
+
+1
+Motivation & the Problem
+FL on heterogeneous edge networks; the Byzantine threat under pathological Non-IID data
+
+2
+Threat Model & Attacks
+Omniscient adaptive adversary; sign-flip, label-flip, IPM, ALIE, Sybil, volume spam
+
+3
+The Aegis Protocol
+Evolution from the interim design; the six mathematical stages; O(kd) complexity
+
+4
+Experimental Setup
+CIFAR-10, 4-shard Non-IID, ImprovedCNN, five robust-aggregator baselines
+
+5
+Results & Analysis
+Per-attack robustness from the finalised experiments; the IPM/ALIE breaches; sweeps
+
+6
+Conclusions & Future Work
+Achievements, honest boundaries, four research directions, references
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+2
+--- Slide 3 ---
+
+
+01
+
+PART ONE
+Motivation & the Problem
+Why federated learning, and why Byzantine resilience is hard under Non-IID data
+--- Slide 4 ---
+
+MOTIVATION
+Why Federated Learning?
+
+Edge devices â€” drone swarms, hospitals, vehicles â€” collaboratively train a shared model. Only gradient vectors are exchanged; raw data never leaves the node.
+
+
+Bandwidth
+â–ª  One gradient per round, cost scales with model size d â€” not dataset size.
+â–ª  4.5 MB / round vs ~21 GB to ship raw data: a 4â€“5 order-of-magnitude saving.
+
+
+Privacy
+â–ª  Server observes only gradients â€” never raw data, labels, or local loss.
+â–ª  Compatible with encryption & integrity checks, no protocol change.
+
+
+The catch
+â–ª  Server has zero visibility into any client's data or training.
+â–ª  A compromised node can submit a poisoned gradient â€” undetectable by inspection.
+
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+3
+--- Slide 5 ---
+
+THE CORE DIFFICULTY
+The Compounding Crisis: Pathological Non-IID Data
+
+â–ª  Real federated nodes are specialists.
+      â€“  4-shard partition: each client sees only ~40% of classes.
+      â€“  Honest gradient dissimilarity Î“ is 10â€“50Ã— larger than IID.
+â–ª  Every geometric defence filters by distance from a centroid.
+      â€“  Under Non-IID, honest specialist updates ARE centroid-distant.
+      â€“  Filters discard the signal and admit stealthy near-centroid poison.
+â–ª  The Byzantine Tax
+      â€“  Accuracy lost to rejecting honest clients, even with zero attackers.
+      â€“  Multi-Krum tax â‰ˆ 0.3â€“0.5; Bulyan loses 8.5 pp under no attack.
+
+The lethal interaction
+Honest specialist  â‰ˆ geometric outlier
+Stealthy Byzantine  â‰ˆ near the centroid
+â†“
+Centroid filters reject the signal
+and admit the poison.
+
+Center Drag (single-pass median)
+No prior single-stage aggregator handles Non-IID diversity, IPM, and Sybil simultaneously.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+4
+--- Slide 6 ---
+
+RESEARCH GAP
+What Is Missing â€” and the Question
+
+
+Research question:  Can one linear-time aggregator protect a highly heterogeneous federated network against coordinated Byzantine attacks
+without a crippling accuracy penalty on honest specialist clients?
+Three requirements no existing defence meets together:
+
+
+âœ“
+Heterogeneity tolerance
+Preserve divergent honest specialists instead of rejecting them as outliers â€” no accuracy penalty on Non-IID clients.
+
+
+âœ“
+Uncontaminated reference
+Score every update against a clean, debiased center that coordinated, stealthy adversaries cannot tilt.
+
+
+âœ“
+Influence capping
+Bound what any single actor can manufacture through duplicated identities or inflated data volume.
+â†’  This gap motivates Aegis.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+5
+--- Slide 7 ---
+
+
+02
+
+PART TWO
+Threat Model & Attacks
+An omniscient, adaptive, coordinated adversary at up to 40% of the network
+--- Slide 8 ---
+
+THREAT MODEL
+Adversary Capabilities & Assumptions
+
+
+The adversary CAN
+â–ª  Know the aggregation rule and global model.
+â–ª  Estimate the honest mean gradient (omniscient).
+â–ª  Fully coordinate all Byzantine clients.
+â–ª  Adapt every round; attack probability = 1.0.
+
+THE ADVERSARY CANNOT
+âœ•  Intercept honest updates before aggregation
+âœ•  Corrupt the server or the model broadcast
+âœ•  Break the honest majority (f < K/2)
+
+Honest-majority bound
+
+Fixed adversary, random participation
+System: K = 30 clients, one honest non-colluding server, m âˆˆ [15,25] sampled/round.  Byzantine fraction swept to f = 0.40 â€” Aegis defends gracefully through f = 0.30 (collapse at 0.40).
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+6
+--- Slide 9 ---
+
+ATTACKS
+The Threat Matrix
+
+
+No single defensive axis defeats all four â€” a robust defence must apply magnitude, direction, and identity checks against a clean, debiased reference.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+7
+--- Slide 10 ---
+
+RELATED WORK
+Existing Defences â€” and Their Limits
+
+â–ª  Bulyan â€” the strongest prior scheme â€” needs f < K/4; it is inapplicable at our 30% setting.
+â–ª  Every O(KÂ²d) scheme is prohibitive at scale. Aegis sustains f = 0.30 at O(kd) â€” past Bulyan's f < K/4 ceiling and far cheaper.
+â–ª  Tolerances above are theoretical (primitive breakdown points); empirically all collapse near f = 0.40 under our Non-IID threat â€” Aegis stays graceful furthest, to f = 0.30.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+8
+--- Slide 11 ---
+
+
+03
+
+PART THREE
+The Aegis Protocol
+From the interim design to the enhanced protocol â€” six mathematical stages, O(kd)
+--- Slide 12 ---
+
+EVOLUTION
+From Initial Aegis to Enhanced Aegis
+
+The interim protocol proved the concept; the enhanced protocol fixes the false-positive and stealth-attack gaps it exposed.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+9
+--- Slide 13 ---
+
+EVOLUTION
+Why the Protocol Evolved
+
+
+Initial Aegis
+(interim)
+
+Enhanced Aegis
+(final)
+
+
+Hard cosine gate was a trap
+cos < 0 either rubber-stamps orthogonal attacks (cos â‰ˆ 0) or amputates honest Non-IID specialists (disjoint data â†’ naturally orthogonal). â†’ continuous soft penalty Î±Â·Pâ‚–.
+
+
+Per-round scoring is blind to stealth
+ALIE and low-Îµ IPM hide inside the round's envelope. â†’ cross-round EMA reputation Î»Râ‚– accumulates a temporal signal.
+
+
+Merging the two risked a death spiral
+Reputation cleans the pool â†’ variance drops â†’ threshold tightens â†’ honest clients cut. â†’ decouple: compute K on the full unfiltered set.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+10
+--- Slide 14 ---
+
+THE AEGIS PROTOCOL
+Aggregation Pipeline â€” Architecture
+
+
+O(kd)
+
+Stage 1 two-pass cosine-screened median (clean reference).   Stage 2 adaptive MAD Euclidean gate â€” the only hard filter.   
+Stage 3 soft credit score fuses volume, cosine penalty Î±Â·Pâ‚–, and reputation Î»Râ‚– into the weights wâ‚–.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+11
+--- Slide 15 ---
+
+THE AEGIS PROTOCOL Â· STEP 1
+Step 1: Local Training & Pseudo-Gradients
+
+
+O(dk)
+
+â–ª  Server broadcasts the global model; each client k trains locally and returns weights wâ‚– and claimed sample size nâ‚–.
+â–ª  Aegis scores in gradient (delta) space â€” robust to the shared initialisation â€” but aggregates the approved clients' weights.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+12
+--- Slide 16 ---
+
+THE AEGIS PROTOCOL Â· STEP 2
+Step 2: Two-Pass Median Decontamination
+
+
+O(kd)
+
+â–ª  Pass 1 screens strongly anti-aligned updates (cos < Ï„) out of the median pool; Pass 2 recomputes a debiased clean center.
+â–ª  Defeats Center Drag: IPM / sign-flip can no longer tilt the reference that every downstream score depends on.
+â–ª  Ï„ = âˆ’0.3 is deliberately lenient â€” honest Non-IID specialists (mildly negative cosine) are retained.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+13
+--- Slide 17 ---
+
+THE AEGIS PROTOCOL Â· STEP 3
+Step 3: Dual Anomaly Scoring
+
+
+O(kd)
+
+â–ª  Every client is re-scored against the clean median on two complementary axes: magnitude (Eâ‚–) and direction (Pâ‚–).
+â–ª  Magnitude-only filters miss IPM; direction-only filters miss amplitude-scaled Sybil floods. Aegis uses both.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+14
+--- Slide 18 ---
+
+THE AEGIS PROTOCOL Â· STEP 4
+Step 4: Adaptive MAD Thresholding
+
+
+O(k)
+
+â–ª  MAD gives a breakdown-point-0.5 scale estimate; the multiplier kâ½áµ—â¾ decays over warmup and relaxes with round variance (CV).
+â–ª  The floor k_floor = 4.0 prevents over-rejection of honest specialists in persistent Non-IID rounds. Euclidean is the only hard gate.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+15
+--- Slide 19 ---
+
+THE AEGIS PROTOCOL Â· STEP 5
+Step 5: Reputation & Credit Scoring
+
+
+O(m)
+
+â–ª  Volume clipping caps inflated-dataset spam; an EMA reputation Râ‚– accumulates each client's persistent directional penalty.
+â–ª  The cosine penalty is soft (Î±Â·Pâ‚–) â€” attackers are suppressed in the weight, never hard-excluded. This replaced the interim's hard cosine gate.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+16
+--- Slide 20 ---
+
+THE AEGIS PROTOCOL Â· STEP 6
+Step 6: Weighted Aggregation
+
+
+O(kd)
+
+â–ª  The new global model is the credit-weighted average of the approved clients' weights.
+â–ª  No pairwise distance matrix is ever formed â€” this is what keeps the whole pipeline linear in d.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+17
+--- Slide 21 ---
+
+THE AEGIS PROTOCOL
+Linear-Time Aggregation: O(kd)
+
+
+
+
+Empirical verification
+â–ª  Aggregation time grows linearly in client count k â€” linear fit RÂ² = 0.9989.
+â–ª  Introselect medians + no pairwise matrix â†’ O(kd), matching FedAvg's floor.
+â–ª  â‰ˆ 30Ã— faster than Bulyan at K=30, dâ‰ˆ1.12M.
+â–ª  Server state: a 30-float EMA table (240 bytes) â€” fast failover.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+18
+--- Slide 22 ---
+
+THE AEGIS PROTOCOL
+Theoretical Guarantees
+
+
+Lemma 1 Â· Pass-1 neutralises IPM
+Any IPM vector âˆ’ÎµÂ·á¸¡_H has cosine â‰¤ 0 < Ï„, so it is removed from the median pool â€” the reference mâ‚‚ stays clean.
+
+Lemma 2 Â· Median breakdown point
+Breakdown-0.5 (f < K/2) bounds the median reference, not the whole pipeline. End-to-end, Aegis stays graceful to f = 0.30 and collapses at f = 0.40 (detection â†’ 0).
+The 0.5 breakdown point is the median reference's; end-to-end Aegis stays graceful to f = 0.30 (collapse at 0.40) â€” at the SGD rate and linear O(kd) cost.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+19
+--- Slide 23 ---
+
+THE AEGIS PROTOCOL
+Convergence I â€” The Robustness Certificate
+
+
+The per-round aggregation error splits into three sources â€” each maps to one experimental regime:
+
+
+Honest reweighting distortion
+Unequal honest weights distort the mean even with zero attackers.
+â†’  Byzantine Tax = 0.08 pp  (Aegis 76.08 vs FedAvg 76.16, no attack).
+
+
+Clipped volume leakage
+Volume clipping caps every client's share at 2M, so spam cannot dominate.
+â†’  Volume-spam fully nullified  (â‰ˆ 74%, on par with no attack).
+
+
+Median contamination
+Surviving Byzantine clients displace the median reference mâ‚‚ by Î”_m.
+â†’  ALIE drags mâ‚‚  â‡’  collapse to 10% (chance).
+
+Score suppression keeps the Byzantine weight w_B small â€” and bounds all three terms:
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+20
+--- Slide 24 ---
+
+THE AEGIS PROTOCOL
+Convergence II â€” Final Theorem & Residual Bias
+
+
+Two terms vanish â€” two are Aegis-specific
+â–ª  Optimisation gap + SGD noise â†’ 0 at the standard O(1/âˆšT) rate as Î·_t decays.
+â–ª  Îº_AÂ·V_H â€” honest-heterogeneity penalty: the price of unequal honest weighting; grows with the Non-IID variance V_H.
+â–ª  Î¶_A â€” residual bias: the ONLY attack-driven, non-vanishing floor. Zero iff no attacker survives the filter.
+
+Residual bias = two leakages
+Î¶_vol is bounded by volume clipping (spam nullified); Î¶_med explodes when the median is poisoned (ALIE: f_AÂ·r large, Î”_m large).
+
+Corollary â€” perfect filtering recovers clean SGD:
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+21
+--- Slide 25 ---
+
+THE AEGIS PROTOCOL
+Theory Meets Experiment â€” Filter Diagnostics
+
+The detection / false-negative panels are the empirical w_B â€” the convergence verdict tracks Î¶_A exactly:
+
+No Attack
+FN n/a Â· Î¶_A = 0  â†’  75%  (Îº_A = 3Îº_H, honest distortion only)
+
+Label-Flip
+FN 100â†’0%, detectionâ†’100%  â‡’  râ†’0, w_Bâ†’0, Î¶_A small  â†’  74%
+
+ALIE
+FN stuck at 100%, detection 0%  â‡’  râ†’1, Î¶_med large  â†’  10%
+
+
+Converge iff Î¶_A is small â€” and Î¶_A is small iff the filter detects the attack. The theorem predicts every regime the experiments show.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+22
+--- Slide 26 ---
+
+
+04
+
+PART FOUR
+Experimental Setup
+CIFAR-10, 4-shard Non-IID, n = 30, f = 0.30, 1000 rounds
+--- Slide 27 ---
+
+SETUP
+Experimental Apparatus
+
+
+
+Data
+CIFAR-10 Â· 4-shard label sharding
+â–ª  30 clients, ~1,664 samples each
+â–ª  ~40% class coverage / client
+â–ª  Î“  10â€“50Ã— the IID baseline
+
+
+Model
+ImprovedCNN Â· GroupNorm Â· Dropout
+â–ª  4 conv + 2 FC, ~1.12M params
+â–ª  SGD, lr 0.01, momentum 0.8
+â–ª  1 local epoch, batch 32
+
+
+Attacks
+f = 0.30 (9/30), p_attack = 1.0
+â–ª  Sign-flip, Label-flip, Vol-spam
+â–ª  ALIE (z=1), IPM (Îµ=0.5)
+â–ª  Sybil (2 clones) â†’ f_eff = 0.56
+
+
+Baselines
+Five robust aggregators
+â–ª  FedAvg, CWMed, Multi-Krum
+â–ª  FoolsGold, Bulyan (f=0.20)
+â–ª  Best accuracy over 1000 rounds
+Oracle ceiling (f=0, 3 seeds):  75.53 Â± 0.22%  â€”  the hard limit set by the Non-IID partition itself.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+23
+--- Slide 28 ---
+
+
+05
+
+PART FIVE
+Results & Analysis
+Per-attack robustness from the finalised experiments â€” one figure at a time
+--- Slide 29 ---
+
+RESULTS
+The Byzantine Tax â€” Cost of Defence Under No Attack
+
+
+0.08 pp
+Aegis overhead vs FedAvg
+â–ª  An effectively free defence in the benign case.
+â–ª  Bulyan loses 8.47 pp with zero attackers â€” Krum selection collapses to a single Non-IID sector.
+â–ª  Validates Ï„ = âˆ’0.3 + adaptive k_floor: honest specialists preserved.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+24
+--- Slide 30 ---
+
+RESULTS Â· BASELINE
+Convergence Stability â€” Three Seeds, No Attack
+
+
+
+
+Mean 75.53 Â± 0.22% across seeds 42 / 123 / 456 â€” the Non-IID oracle ceiling; single-seed results are representative.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+25
+--- Slide 31 ---
+
+RESULTS Â· BASELINE
+Robust Aggregators vs FedAvg â€” No Attack
+
+
+
+
+Aegis tracks FedAvg (76.08 vs 76.16); CWMed and Krum plateau 4â€“5 pp lower â€” the Byzantine Tax of centroid filters under Non-IID.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+26
+--- Slide 32 ---
+
+RESULTS
+Head-to-Head Under Active Attack  (f = 0.30)
+
+â–ª  Aegis beats every geometric baseline (CWMed, Krum, Bulyan) on every attack; best overall on label-flip (+1.49 pp).
+â–ª  Three regimes: dominant (label-flip), competitive (sign-flip, IPM, Sybil), failed (ALIE). Per-attack figures follow.
+â–ª  â€  Bulyan evaluated at f = 0.20 (its n â‰¥ 4f+3 constraint is violated at f = 0.30).
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+27
+--- Slide 33 ---
+
+RESULTS Â· AEGIS
+Aegis Across Conventional Attacks
+
+
+
+
+No-attack and label-flip converge together (~74%); sign-flip and IPM are tightly bounded, not collapsed â€” two-pass median limits the damage.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+28
+--- Slide 34 ---
+
+RESULTS Â· SIGN-FLIP
+Sign-Flip â€” All Aggregators (f = 0.30)
+
+
+
+
+Aegis 66.6% â€” no early collapse; FedAvg crashes to 40%, FoolsGold to 34%; Krum (70%) leads on this pure-magnitude attack.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+29
+--- Slide 35 ---
+
+RESULTS Â· LABEL-FLIP
+Label-Flip â€” All Aggregators (f = 0.30)
+
+
+
+
+Aegis is the strongest defence at 74.34% â€” within 1.7 pp of the clean ceiling; the MAD gate intercepts the corrupt gradients.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+30
+--- Slide 36 ---
+
+RESULTS Â· IPM
+Inner-Product Manipulation â€” All Aggregators
+
+
+
+
+Aegis holds 63.3% by aggregate dilution while CWMed / Krum / Bulyan collapse to â‰¤ 17%; only FoolsGold edges ahead (71%).
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+31
+--- Slide 37 ---
+
+RESULTS Â· ALIE
+A Little Is Enough â€” The Breach
+
+
+
+
+Aegis collapses to 10% (chance) â€” ALIE hijacks the median; FoolsGold's history tracking is the only survivor (71%).
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+32
+--- Slide 38 ---
+
+RESULTS Â· ADVANCED
+Volume-Spam, ALIE & Sybil vs Aegis
+
+
+
+
+Volume-spam is fully nullified (74%) by median clipping; ALIE and dense Sybil clusters overwhelm the median anchor.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+33
+--- Slide 39 ---
+
+RESULTS Â· STRESS TEST
+Resilience vs Byzantine Fraction (Sign-Flip)
+
+
+
+
+Graceful degradation to f = 0.30 (~2.8 pp / +10 pp); a cliff at f = 0.40 as adversaries become a per-round majority and break the median.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+34
+--- Slide 40 ---
+
+RESULTS Â· HETEROGENEITY
+Sensitivity to Non-IID Degree (Shard Sweep)
+
+
+
+
+At 4 shards the label-flip gap is â‰ˆ 0; extreme skew (2 shards) widens it to ~15 pp as honest variance overlaps the attack.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+35
+--- Slide 41 ---
+
+RESULTS
+Ablation: Which Component Carries the Load?
+
+
+Reading the table
+â–ª  The Euclidean MAD filter is the load-bearing wall: removing it costs 2.12 pp and zeroes detection.
+â–ª  Adaptive threshold trades precision for recall â€” a fixed k lifts DR to 92% but adds Byzantine Tax.
+â–ª  Cosine penalty is marginal for label-flip (âˆ’0.04) â€” but it is the only signal under IPM.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+36
+--- Slide 42 ---
+
+RESULTS Â· ALIE ABLATION
+No Hyperparameter Recovers ALIE
+
+
+
+
+Sweeping the cosine-penalty weight Î± leaves accuracy near chance â€” ALIE is a structural gap, not a tuning issue.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+37
+--- Slide 43 ---
+
+RESULTS
+Summary Across All Attacks
+
+â–ª  Aegis is strictly superior to all geometric baselines (CWMed, Krum, Bulyan) on every attack.
+â–ª  FoolsGold wins ALIE & Sybil â€” its full-history tracking outresolves the 20-round EMA.
+â–ª  No aggregator dominates everywhere â†’ motivates an attack-type-aware routing layer (future work).
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+38
+--- Slide 44 ---
+
+
+06
+
+PART SIX
+Conclusions & Future Work
+What survives the experimental critique â€” and what comes next
+--- Slide 45 ---
+
+CONCLUSION
+Achievements & Honest Boundaries
+
+
+
+What survives the critique
+â–ª  Near-zero Byzantine Tax: 0.08 pp vs FedAvg under no attack.
+â–ª  Dominant label-flip resilience: 74.34%, 98.8% precision.
+â–ª  O(kd) linear-time aggregation â€” ~30Ã— faster than Bulyan (RÂ²=0.999).
+â–ª  Two-pass median prevents Center Drag â€” a structural contribution.
+
+
+Stated boundaries
+â–ª  IPM partial evasion: 63.3% by dilution, 0% detection â€” velocity patch proposed.
+â–ª  ALIE catastrophic failure: 10% â€” EMA window too short; remains open.
+â–ª  f = 0.40 collapse: provable limit of any median-based scheme (0.5 breakdown).
+The failure modes are structural gaps requiring architectural extensions â€” not implementation defects.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+39
+--- Slide 46 ---
+
+FUTURE WORK
+Four Research Directions
+
+
+
+1
+Server-Velocity for IPM
+Screen against a momentum buffer Vâ½áµ—â»Â¹â¾ â€” a pre-debiased reference IPM cannot poison. (Re-activates the interim's server momentum.)
+
+
+2
+Kalman Reputation for ALIE
+Replace fixed-window EMA with a Kalman-filtered estimator â€” adaptive memory at O(Kd), not FoolsGold's O(KÂ²d).
+
+
+3
+Asynchronous Aegis
+Staleness-weighted cosine penalty to suppress deliberately delayed Byzantine updates over disrupted links.
+
+
+4
+Dynamic EMA Decay
+Tie Î³ to network churn â€” shrink memory in volatile rounds, keep long memory when stable.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+40
+--- Slide 47 ---
+
+REFERENCES
+Selected References  (1/2)
+
+[1]  H. B. McMahan et al., â€œCommunication-Efficient Learning of Deep Networks from Decentralized Data,â€ AISTATS, 2017.
+[2]  P. Blanchard et al., â€œMachine Learning with Adversaries: Byzantine-Tolerant Gradient Descent (Krum),â€ NeurIPS, 2017.
+[3]  D. Yin et al., â€œByzantine-Robust Distributed Learning: Towards Optimal Statistical Rates,â€ ICML, 2018.
+[4]  E. M. El Mhamdi et al., â€œThe Hidden Vulnerability of Distributed Learning in Byzantium (Bulyan),â€ ICML, 2018.
+[5]  G. Baruch et al., â€œA Little Is Enough: Circumventing Defenses for Distributed Learning (ALIE),â€ NeurIPS, 2019.
+[6]  C. Xie et al., â€œFall of Empires: Breaking Byzantine-tolerant SGD by Inner Product Manipulation (IPM),â€ UAI, 2019.
+[7]  C. Fung et al., â€œThe Limitations of Federated Learning in Sybil Settings (FoolsGold),â€ RAID, 2020.
+[8]  X. Cao et al., â€œFLTrust: Byzantine-Robust Federated Learning via Trust Bootstrapping,â€ NDSS, 2021.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+41
+--- Slide 48 ---
+
+REFERENCES
+Selected References  (2/2)
+
+[9]  T. D. Nguyen et al., â€œFLAME: Taming Backdoors in Federated Learning,â€ USENIX Security, 2022.
+[10]  C. Xie et al., â€œZeno: Distributed SGD with Suspicion-based Fault-tolerance,â€ ICML, 2019.
+[11]  S. P. Karimireddy et al., â€œLearning from History for Byzantine Robust Optimization,â€ ICML, 2021.
+[12]  V. Shejwalkar, A. Houmansadr, â€œManipulating the Byzantine (DnC),â€ NDSS, 2021.
+[13]  S. Awan et al., â€œCONTRA: Defending Against Poisoning Attacks in Federated Learning,â€ ESORICS, 2021.
+[14]  K. Pillutla et al., â€œRobust Aggregation for Federated Learning (RFA),â€ IEEE Trans. Signal Process., 2022.
+[15]  U. Shahul, J. Harshan, â€œFORTA: Byzantine-Resilient FL Aggregation via DFT-Guided Krum,â€ arXiv:2507.14588, 2025.
+[16]  T.-M. H. Hsu et al., â€œMeasuring the Effects of Non-Identical Data Distribution for Federated Visual Classification,â€ NeurIPS-W, 2019.
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+42
+--- Slide 49 ---
+
+
+
+Thank You
+Questions & Discussion
+
+Enhanced Aegis: A Byzantine-Resilient FL Protocol for Drone Swarms
+Abhishek Kumar Tripathi  Â·  2024EET2845  Â·  Advisor: Prof. Harshan Jagadeesh
+Department of Electrical Engineering, IIT Delhi
+--- Slide 50 ---
+
+APPENDIX Â· BACKUP
+Why These Hyperparameters?
+
+
+Enhanced Aegis  â€”  M.Tech Thesis Defense
+43

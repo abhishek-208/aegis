@@ -1,9 +1,51 @@
+# ===== Python =====
 __pycache__/
 venv/
+*.pyc
+
+# ===== Data, results, backups (large / regenerated) =====
 data/
 Results/
 Backup/
+MTP2 Results/
+_scan_out/
+Thesis/backup/
+
+# ===== Editor / local config =====
 .vscode/
-*.pyc
-*.png
-*.jpg
+.claude/settings.local.json
+
+# ===== Cloud / experiment outputs =====
+modal/
+
+# ===== Personal notes & auxiliary docs =====
+My Notes/
+Presentation/
+
+# ===== Large standalone binaries =====
+MTP.pdf
+Aegis Convergence.pdf
+
+# ===== LaTeX build artifacts =====
+*.aux
+*.log
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+
+# ===== Figure / equation render scratch =====
+Thesis/_math/_tmp/
+Thesis/_eqprev/
+
+# ===== Office binaries: ignore except the defense deck =====
+*.pptx
+!Thesis/Aegis_Defense.pptx
+
+# NOTE: thesis figures (Thesis/figures, Thesis/images, Thesis/_math/*.png)
+# are intentionally committed, so *.png is NOT globally ignored.

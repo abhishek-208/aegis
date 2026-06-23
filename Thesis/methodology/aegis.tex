@@ -1,0 +1,366 @@
+\documentclass[../main.tex]{subfiles}
+\begin{document}
+
+\chapter{THE AEGIS PROTOCOL: ARCHITECTURE AND DESIGN}
+\label{ch:methodology}
+
+In this chapter, we introduce \aegis{}, a comprehensive Byzantine-resilient aggregation protocol designed to overcome the fundamental limitations of traditional single-pass centroid filters. To achieve this, we have constructed a six-stage pipeline that thoughtfully combines two-pass coordinate-wise median decontamination, dual-metric geometric scoring, adaptive MAD-based thresholding, volume-clipped credit scoring, and cross-round EMA reputation tracking. Throughout this chapter, we derive the exact mathematical execution of each stage from first principles, clearly demonstrate why each specific stage is strictly \emph{necessary} under the combined threat models outlined in \cref{ch:background}, and formally prove that our complete pipeline executes efficiently in $\Ocal{Kd}$ time.
+
+%==================================================================
+\section{Protocol Overview}
+\label{sec:aegis_overview}
+%==================================================================
+
+Suppose we have $\nclients$ registered clients participating in a given communication round $t$. Each client $i$ first receives the current global model $\globmod^{(t)}$, trains locally for $E$ epochs on its private data, and returns its updated model weights $\mathbf{w}_i^{(t)}$. To ensure our geometric filtering is grounded, \aegis{} operates strictly on the \emph{gradient deltas}:
+\begin{equation}
+    \locgrad{i}^{(t)} \;=\; \mathbf{w}_i^{(t)} \;-\; \globmod^{(t)}.
+    \label{eq:delta_def}
+\end{equation}
+By performing our analysis entirely in gradient space rather than weight space, we isolate the true direction and magnitude of each client's learning step. After filtering and scoring, we reconstruct the new global model by taking a credit-weighted average of the original weights $\mathbf{w}_i^{(t)}$ from the approved subset of clients.
+
+We formally present the complete \aegis{} protocol in \Cref{alg:aegis}.
+
+\begin{algorithm}[htbp]
+\caption{\aegis{} Aggregation — Round $t$}
+\label{alg:aegis}
+\begin{algorithmic}[1]
+\Require Updates $\{(k,\, \mathbf{w}_k^{(t)},\, n_k)\}_{k=1}^{\nclients}$, global model $\globmod^{(t)}$, round index $t$
+\Ensure New global model $\globmod^{(t+1)}$, reputation state $\{R_k\}$
+
+\State \textbf{// Step 1: Compute gradient deltas}
+\For{$k = 1$ \textbf{to} $\nclients$}
+    \State $\locgrad{k}^{(t)} \gets \mathbf{w}_k^{(t)} - \globmod^{(t)}$
+\EndFor
+
+\State \textbf{// Step 2: Pass 1 — Preliminary median \& directional screen}
+\State $\medone^{(t)} \gets \Med\!\left(\{\locgrad{k}^{(t)}\}_{k=1}^{\nclients}\right)$ \Comment{coordinate-wise}
+\State $S_1^{(t)} \gets \left\{k : \dfrac{\inner{\locgrad{k}^{(t)}}{\medone^{(t)}}}{\norm{\locgrad{k}^{(t)}}\norm{\medone^{(t)}}} \;\geq\; \taucosine\right\}$
+
+\State \textbf{// Step 3: Pass 2 — Debiased reference median}
+\State $\medtwo^{(t)} \gets \Med\!\left(\{\locgrad{k}^{(t)}\}_{k \in S_1^{(t)}}\right)$ \Comment{coordinate-wise, clean pool only}
+
+\State \textbf{// Step 4: Dual anomaly scoring against clean median}
+\For{$k = 1$ \textbf{to} $\nclients$}
+    \State $E_k^{(t)} \gets \norm{\locgrad{k}^{(t)} - \medtwo^{(t)}}_2$
+    \State $P_k^{(t)} \gets 1 - \dfrac{\inner{\locgrad{k}^{(t)}}{\medtwo^{(t)}}}{\norm{\locgrad{k}^{(t)}}\norm{\medtwo^{(t)}}}$
+\EndFor
+
+\State \textbf{// Step 5: Adaptive MAD threshold \& Euclidean filter}
+\State $k^{(t)} \gets$ \Call{AdaptiveK}{$t$} \Comment{see \cref{eq:adaptive_k_combined}}
+\State $T^{(t)} \gets \Med(\{E_k^{(t)}\}) + k^{(t)} \cdot \Med\!\left(|E_k^{(t)} - \Med(\{E_k^{(t)}\})|\right)$
+\State $A_t \gets \{k : E_k^{(t)} \leq T^{(t)}\}$ \Comment{approved set}
+
+\State \textbf{// Step 6: Volume clipping}
+\For{$k \in A_t$}
+    \State $\widetilde{V}_k^{(t)} \gets \min\!\left(n_k,\; 2 \cdot \Med\!\left(\{n_j\}_{j \in A_t}\right)\right)$
+\EndFor
+
+\State \textbf{// Step 7: Credit ramp \& EMA reputation update}
+\State $\rho^{(t)} \gets \min(t / T_{\text{cr}},\; 1.0)$ \Comment{credit ramp; $T_{\text{cr}} = 100$}
+\For{$k \in A_t$}
+    \State $R_k^{(t+1)} \gets \gamma R_k^{(t)} + (1 - \gamma) P_k^{(t)}$  \Comment{EMA update; $R_k^{(0)} = 0$}
+\EndFor
+
+\State \textbf{// Step 8: Credit score computation}
+\For{$k \in A_t$}
+    \State $D_k^{(t)} \gets \rho^{(t)} \bigl(E_k^{(t)} + \alpha P_k^{(t)} + \lambda R_k^{(t)}\bigr) + \varepsilon$
+    \State $S_k^{(t)} \gets \widetilde{V}_k^{(t)} \;/\; D_k^{(t)}$
+\EndFor
+
+\State \textbf{// Step 9: Weighted aggregation}
+\State $\globmod^{(t+1)} \gets \displaystyle\sum_{k \in A_t} \frac{S_k^{(t)}}{\sum_{j \in A_t} S_j^{(t)}} \cdot \mathbf{w}_k^{(t)}$
+
+\State \Return $\globmod^{(t+1)}$
+\end{algorithmic}
+\end{algorithm}
+
+\Cref{tab:aegis_params} neatly lists all hyperparameter values we rely on throughout our experimental evaluation.
+
+\begin{table}[htbp]
+\centering
+\caption{\aegis{} hyperparameters used throughout the experimental evaluation.}
+\label{tab:aegis_params}
+\begin{tabular}{llll}
+\toprule
+\textbf{Symbol} & \textbf{Variable} & \textbf{Value} & \textbf{Role} \\
+\midrule
+$\taucosine$       & \texttt{PASS1\_COS\_THRESHOLD}   & $-0.3$   & Pass~1 directional screen \\
+$k_{\max}$        & \texttt{K\_MAX}                  & $6.0$    & Initial threshold multiplier \\
+$k_{\min}$        & \texttt{K\_MIN}                  & $2.0$    & Final threshold multiplier \\
+$T_{\text{warm}}$ & \texttt{WARMUP\_ROUNDS}          & $300$    & Decay horizon (rounds) \\
+$k_{\text{floor}}$& \texttt{K\_SAFE\_FLOOR}          & $4.0$    & Hard floor on $k^{(t)}$ \\
+$\nu$             & \texttt{VARIANCE\_SENSITIVITY}   & $3.0$    & Strategy~B variance scale \\
+$\alpha$          & \texttt{COSINE\_PENALTY\_WEIGHT} & $30.0$   & Cosine penalty weight \\
+$\gamma$          & \texttt{REPUTATION\_DECAY}       & $0.95$   & EMA decay factor \\
+$\lambda$         & \texttt{REPUTATION\_WEIGHT}      & $20.0$   & Reputation penalty weight \\
+$T_{\text{cr}}$   & \texttt{CREDIT\_WARMUP\_ROUNDS}  & $100$    & Credit ramp horizon \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%==================================================================
+\section{Two-Pass Coordinate-Wise Median Decontamination}
+\label{sec:aegis_twopass}
+%==================================================================
+
+\subsection{The Center-Drag Failure of Single-Pass Median}
+\label{sec:aegis_center_drag}
+
+A standard coordinate-wise median (CWMed) aggregator computes its reference point by taking the median independently across every coordinate:
+\begin{equation}
+    \mathbf{m}_{\text{single}} = \Med\!\left(\{\locgrad{i}\}_{i=1}^{\nclients}\right).
+    \label{eq:single_pass_median}
+\end{equation}
+Theoretically, this coordinate-wise median enjoys a breakdown point of $0.5$, meaning no single coordinate of $\mathbf{m}_{\text{single}}$ can be forced to an extreme value unless at least $\nclients/2$ adversaries collude to push it there. In principle, \aegis{} securely inherits this breakdown ceiling. In practice, under our demanding $f \leq 0.3\nclients$ regime (\cref{asm:byz_fraction}), we empirically validate its resilience, observing degradation only when stochastic per-round subsampling inadvertently pushes the selected adversarial fraction near that $0.5$ limit (\cref{tab:byz_sweep}).
+
+However, ensuring the robustness of the median itself does not magically guarantee the robustness of statistics \emph{computed relative to that median}. For instance, under an \ipm{} or sign-flip attack, the injected Byzantine updates $\{\locgrad{byz}\}$ aggressively point in the exact opposite hemisphere of the honest mean $\honmean$. While these anti-aligned vectors lack the raw numbers to pull the coordinate-wise median to an extreme, they successfully \emph{drag its overall direction} subtly toward the adversarial hemisphere. Consequently, the contaminated single-pass median $\mathbf{m}_{\text{single}}$ suffers from a directional bias:
+\begin{equation}
+    \inner{\mathbf{m}_{\text{single}}}{\honmean} < \inner{\mathbf{m}_{\text{clean}}}{\honmean},
+    \label{eq:center_drag}
+\end{equation}
+where $\mathbf{m}_{\text{clean}}$ represents the hypothetical, perfectly clean median computed over honest updates alone. This directional bias triggers a catastrophic cascade effect: every subsequent scoring step in the pipeline (including Euclidean distances and cosine penalties) is now computed \emph{relative to a poisoned reference point}. This artificially inflates the distance scores of honest Non-IID clients whose perfectly valid updates happen to diverge from the newly dragged median, leading to devastating false positive rejections.
+
+While employing a Geometric Median \citep{chen2017distributed} naturally corrects this bias, doing so demands iterative Weiszfeld updates that cost a massive $\mathcal{O}(\nclients^2 d)$ per round---a completely unacceptable computational burden for resource-constrained edge servers. To bypass this, \aegis{} effectively corrects this ``Center Drag'' at a sleek $\mathcal{O}(\nclients d)$ cost by introducing our signature two-pass architecture.
+
+\subsection{Pass 1: Directional Decontamination}
+\label{sec:aegis_pass1}
+
+In Pass~1, we first compute a preliminary coordinate-wise median $\medone$ over the entire pool of $\nclients$ updates:
+\begin{equation}
+    \medone = \Med\!\left(\{\locgrad{i}\}_{i=1}^{\nclients}\right).
+    \label{eq:pass1_median}
+\end{equation}
+Even though $\medone$ may harbour mild contamination, it reliably preserves the correct hemisphere for the honest majority. The inequality $\inner{\medone}{\honmean} > 0$ strictly holds as long as $|\mathcal{B}| < \nclients/2$, because actually breaking the coordinate-wise median requires a strict adversarial majority.
+
+We purposefully use $\medone$ solely as a rough directional reference point. We quickly score every client $i$ by computing its cosine similarity to this preliminary median:
+\begin{equation}
+    c_i = \frac{\inner{\locgrad{i}}{\medone}}{\norm{\locgrad{i}}\norm{\medone}},
+    \label{eq:pass1_cosine}
+\end{equation}
+allowing us to formally define the Pass~1 survivor set:
+\begin{equation}
+    S_1 = \left\{i \;:\; c_i \;\geq\; \taucosine\right\}, \qquad \taucosine = -0.3.
+    \label{eq:pass1_screen}
+\end{equation}
+We deliberately configure the threshold $\taucosine = -0.3$ to be highly lenient. This easily passes honest Non-IID clients whose highly specialised gradients naturally diverge moderately from the center ($c_i \in [-0.3, +1.0]$), while decisively amputating severely anti-aligned updates located deep in the opposite hemisphere ($c_i < -0.3$). Because pure sign-flip attackers produce $c_i \approx -1.0$ and dangerous \ipm{} attackers (with $\varepsilon \geq 0.1$) similarly produce $c_i \approx -1.0$, Pass~1 successfully screens both threats out of the clean pool.
+
+\subsection{Pass 2: Debiased Reference Median}
+\label{sec:aegis_pass2}
+
+With the deeply anti-aligned vectors removed, we securely compute our debiased reference median:
+\begin{equation}
+    \medtwo = \Med\!\left(\{\locgrad{i}\}_{i \in S_1}\right).
+    \label{eq:pass2_median}
+\end{equation}
+Because the refined set $S_1$ strictly excludes the adversarial vectors responsible for dragging the median, we effectively eliminate the dangerous Center Drag phenomenon described in \eqref{eq:center_drag}. Our new $\medtwo$ now sits cleanly in the correct honest hemisphere, providing a pristine geometric baseline for all subsequent scoring operations.
+
+Crucially, in Step~4, we rescore \emph{all} $\nclients$ clients against this newly purified $\medtwo$---including any clients that temporarily failed the $S_1$ screen. This highlights a fundamental design principle of \aegis{}: Pass~1 operates strictly as a \emph{median-quality} mechanism designed to clean the reference point, not as an irreversible rejection gate. If a client is excluded from $S_1$ due to strange directional variance but ultimately maintains a Euclidean distance $E_i$ safely within our adaptive threshold, we still admit them into the final approved set $A_t$.
+
+%==================================================================
+\section{Adaptive MAD-Based Thresholding}
+\label{sec:aegis_threshold}
+%==================================================================
+
+\subsection{Why Fixed Thresholds Fail During Non-IID Warmup}
+\label{sec:aegis_fixed_thresh_failure}
+
+Armed with the beautifully debiased median $\medtwo$, \aegis{} proceeds to formally compute the Euclidean distance separating every client from our clean reference:
+\begin{equation}
+    E_i = \left\|\locgrad{i} - \medtwo\right\|_2, \qquad i = 1, \ldots, \nclients.
+    \label{eq:euclidean_distance}
+\end{equation}
+At this stage, it becomes tempting to apply a fixed rejection threshold $T = \text{const}$. However, doing so fails spectacularly during the Non-IID warmup phase due to two structural realities:
+
+\textbf{(i) Early-round variance explosion.} At round $t = 1$, client models diverge rapidly from a shared random initialisation, naturally producing high-magnitude, high-variance updates. If we deploy a tight threshold calibrated for steady-state convergence ($t \gg 300$), we will brutally reject $30$--$50\%$ of perfectly honest clients in the early rounds, inflicting an extreme Byzantine Tax at the worst possible time in the training lifecycle.
+
+\textbf{(ii) Non-IID diversity.} Under our demanding 4-shard label sharding partition, perfectly honest specialist clients naturally produce updates with centroid distances that legitimately span one to two entire orders of magnitude. A threshold tight enough to successfully reject a sign-flip attack in a smooth, homogeneous setting will inevitably decapitate the most divergent, highly informative honest specialists in our Non-IID setting.
+
+\subsection{Strategy A: Round-Based Adaptive Decay}
+\label{sec:aegis_strategy_a}
+
+To solve the early-variance explosion, we smoothly adapt our threshold multiplier $k^{(t)}$ linearly from a highly forgiving initial value $k_{\max}$ down to a strict asymptotic value $k_{\min}$ over a dedicated warmup horizon $T_{\text{warm}}$:
+\begin{equation}
+    k_A^{(t)} = k_{\max} - \left(k_{\max} - k_{\min}\right) \cdot \min\!\left(\frac{t}{T_{\text{warm}}},\; 1\right).
+    \label{eq:strategy_a}
+\end{equation}
+In our implementation, we use $k_{\max} = 6.0$, $k_{\min} = 2.0$, and $T_{\text{warm}} = 300$ rounds. At $t = 0$, $k_A = 6.0$ warmly accommodates the massive initial gradient diversity. By the time we reach $t \geq 300$, $k_A = 2.0$, tightly clamping down the defensive filter exactly as the honest gradient variance safely contracts near final convergence.
+
+\subsection{Strategy B: Variance-Normalized Relaxation}
+\label{sec:aegis_strategy_b}
+
+Unfortunately, Strategy A remains completely blind to the \emph{instantaneous} level of gradient dispersion occurring within a specific round. Even late in training, highly Non-IID environments can sporadically produce rounds where perfectly converged specialist clients exhibit massive gradient spreads. In these moments, relying strictly on $k_A^{(t)}$ triggers catastrophic over-rejection. To counter this, our Strategy~B actively modulates the multiplier by monitoring the Coefficient of Variation of the distance distribution in real-time:
+\begin{equation}
+    \mathrm{CV}^{(t)} = \frac{\mathrm{MAD}^{(t)}}{\mathrm{Med}(\{E_i\}) + \varepsilon},
+    \label{eq:cv}
+\end{equation}
+where $\mathrm{MAD}^{(t)}$ represents our Median Absolute Deviation, formally defined in \eqref{eq:mad} below. We fuse these two strategies to form our final combined adaptive multiplier:
+\begin{equation}
+    k^{(t)} = \max\!\left(k_A^{(t)} \cdot \left(1 + \nu \cdot \mathrm{CV}^{(t)}\right),\; k_{\text{floor}}\right),
+    \label{eq:adaptive_k_combined}
+\end{equation}
+utilising a variance sensitivity parameter $\nu = 3.0$ and a strict hard floor $k_{\text{floor}} = 4.0$. When the updates suddenly scatter ($\mathrm{CV}^{(t)}$ spikes), $k^{(t)}$ rapidly inflates, gracefully preserving the honest specialists. The hard floor $k_{\text{floor}}$ ensures that $k^{(t)}$ never collapses to the dangerously tight $k_{\min} = 2.0$ in highly Non-IID settings, even when Strategies A and B might mathematically suggest doing so.
+
+\subsection{MAD Threshold Construction}
+\label{sec:aegis_mad}
+
+To construct the final threshold boundary, we employ the Median Absolute Deviation, which provides a remarkably robust (breakdown-point-$0.5$) estimate of the true scale of $\{E_i\}$:
+\begin{equation}
+    \mathrm{MAD}^{(t)} = \Med\!\left(\left|E_i - \Med\!\left(\{E_j\}\right)\right|\right).
+    \label{eq:mad}
+\end{equation}
+We then draw our final rejection threshold:
+\begin{equation}
+    \boxed{T^{(t)} = \Med\!\left(\{E_i\}\right) + k^{(t)} \cdot \mathrm{MAD}^{(t)}},
+    \label{eq:threshold}
+\end{equation}
+firmly defining our approved set as $A_t = \{i : E_i \leq T^{(t)}\}$. We specifically choose to use MAD rather than the standard deviation because $\mathrm{MAD}$ boasts a mathematical breakdown point of $0.5$ (rendering it fully robust to up to $50\%$ outliers). By contrast, standard deviation suffers from a fragile breakdown point of $0$, where a single massive outlier can arbitrarily inflate the scale. Throughout our evaluated Byzantine fractions (up to $f/\nclients = 0.30$), we find that $\mathrm{MAD}$ consistently delivers a highly reliable scale estimate where the standard deviation spectacularly fails. Naturally, this vital advantage holds strong only as long as the honest updates maintain their per-round majority, dissolving rapidly when stochastic subsampling pushes us to $f/\nclients = 0.40$ (\cref{tab:byz_sweep}).
+
+%==================================================================
+\section{Temporal Reputation: Cross-Round EMA Penalty}
+\label{sec:aegis_reputation}
+%==================================================================
+
+\subsection{Why Single-Round Scoring Fails Against ALIE and Stealthy Sybil}
+\label{sec:aegis_reputation_motivation}
+
+Stealthy attacks like ALIE \citep{baruch2019little} and low-$\varepsilon$ \ipm{} are explicitly designed to carefully place poisoned gradients within the single-round distance distribution of the honest clients. In any given round, an intelligent attacker easily satisfies $E_{byz} \leq T^{(t)}$ and achieves a beautifully low cosine penalty $P_{byz}$, proudly securing an approved status completely indistinguishable from a genuine specialist client. A Sybil adversary employing a minute perturbation $\sigma_s$ (as described in \cref{sec:attack_sybil}) similarly floats right past these per-round geometric filters.
+
+However, the fatal flaw of these stealthy persistent attackers is fundamentally temporal: across multiple rounds, their ongoing cosine penalty $P_i^{(t)}$ consistently elevates relative to honest clients, even if it never trips the single-round rejection boundary. \aegis{} elegantly exploits this subtle but permanent drag by enforcing a per-client Exponential Moving Average (EMA) reputation score.
+
+\subsection{EMA Reputation Update Rule}
+\label{sec:aegis_ema}
+
+At the conclusion of each round, we actively update the reputation score of every single \emph{approved} client $i \in A_t$:
+\begin{equation}
+    R_i^{(t+1)} = \gamma \cdot R_i^{(t)} + (1 - \gamma) \cdot P_i^{(t)},
+    \label{eq:ema_reputation}
+\end{equation}
+where $\gamma = 0.95$ defines our decay factor, and $P_i^{(t)} = 1 - \cos(\locgrad{i}^{(t)}, \medtwo)$ isolates the client's single-round cosine penalty. Importantly, clients that are actively rejected in a given round ($i \notin A_t$) have their reputations securely held fixed: their $R_i$ neither resets nor accumulates during their rounds of exclusion.
+
+\textbf{Interpretation of $\gamma = 0.95$.}
+By setting the decay $\gamma$ to $0.95$, we grant the EMA an effective memory window of approximately $1/(1-\gamma) = 20$ rounds. Consequently, an honest client holding a low persistent penalty ($P_i \approx 0.2$) smoothly converges to $R_i^\infty = P_i = 0.2$. The \emph{design assumption} motivating the reputation mechanism was that a stealthy attacker such as ALIE would expose a consistently elevated penalty: we initially hypothesised $P_{alie} \approx 0.8$, which would converge to $R_{alie}^\infty = 0.8$ and, after roughly $20$ rounds, open a wide reputation differential:
+\begin{equation}
+    \Delta R^\infty = R_{alie}^\infty - R_{hon}^\infty = 0.8 - 0.2 = 0.6.
+    \label{eq:reputation_gap}
+\end{equation}
+Under this assumption the differential would then be amplified by our credit score via the penalty weight $\lambda = 20.0$ (\cref{sec:aegis_credit}). We stress that this is the \emph{intended} behaviour rather than an observed one: our experiments later show that the omniscient ALIE construction in fact sustains only a moderate per-round penalty of $P_{alie} \approx 0.3$--$0.5$ (\cref{sec:results_alie}), well below the hypothesised $0.8$. The reputation gap that actually materialises is therefore too narrow to suppress the attacker, and the EMA mechanism fails against ALIE---a limitation we examine empirically in \cref{sec:results_alie}.
+
+\subsection{Credit Score with Reputation Integration}
+\label{sec:aegis_credit}
+
+To finalise a client's weight, we compute a comprehensive credit score for every approved client $k$. This score gracefully integrates their reported data volume, single-round geometric accuracy, and cross-round reputation into a powerful unified denominator $D_k^{(t)}$:
+\begin{equation}
+    D_k^{(t)} = \rho^{(t)}\!\left(E_k^{(t)} + \alpha P_k^{(t)} + \lambda R_k^{(t)}\right) + \varepsilon,
+    \label{eq:denominator}
+\end{equation}
+\begin{equation}
+    S_k^{(t)} = \frac{\widetilde{V}_k^{(t)}}{D_k^{(t)}},
+    \label{eq:credit_score}
+\end{equation}
+where:
+\begin{itemize}
+    \item $\widetilde{V}_k^{(t)} = \min\!\left(n_k,\; 2 \cdot \Med\!\left(\{n_j\}_{j \in A_t}\right)\right)$ provides our essential volume-clipped data size. This strict ceiling bounds the influence of any malicious client attempting to execute a Volume Spam attack by claiming an astronomically large dataset.
+    \item $\rho^{(t)} = \min(t / T_{\text{cr}},\; 1.0)$ with $T_{\text{cr}} = 100$ serves as our \emph{credit ramp}. In the earliest rounds where geometric penalties are notoriously unreliable due to high honest variance, $\rho^{(t)} \approx 0$ flattens all denominators down to $\varepsilon$, making the early-round scores safely proportional to volume alone.
+    \item $\alpha = 30.0$ heavily weights the single-round directional penalty.
+    \item $\lambda = 20.0$ firmly enforces the cross-round reputation penalty.
+\end{itemize}
+
+Once the scores are finalised, we compute the cleanly normalised aggregation weight for client $k$:
+\begin{equation}
+    w_k^{(t)} = \frac{S_k^{(t)}}{\displaystyle\sum_{j \in A_t} S_j^{(t)}},
+    \label{eq:normalized_score}
+\end{equation}
+and finally, we reconstruct our triumphant new global model:
+\begin{equation}
+    \globmod^{(t+1)} = \sum_{k \in A_t} w_k^{(t)} \cdot \mathbf{w}_k^{(t)}.
+    \label{eq:final_aggregation}
+\end{equation}
+
+\textbf{Intended effect on ALIE---and why it does not hold.} The mechanism was designed under the assumption that an ALIE attacker would expose a high penalty $P_{alie} \approx 0.8$. \emph{Were} this true, the 20-round EMA would drive $R_{alie} \to 0.8$, the reputation term would grow to $\lambda R_{alie} = 20 \times 0.8 = 16.0$ (versus $\lambda R_{hon} = 4.0$ for an honest client at $R_{hon} = 0.2$), and, combined with the single-round directional hit ($\alpha P_{alie} = 30 \times 0.8 = 24$ versus $\alpha P_{hon} = 6$), the denominator would stack as $(E_{alie} + 40)$ against an honest $(E_{hon} + 10)$---an approximate $4\times$ credit suppression. In practice, however, the omniscient ALIE construction $\mu - z\sigma$ holds the per-round penalty at only $P_{alie} \approx 0.3$--$0.5$, so $R_{alie}$ converges to a value barely separable from honest specialists. The realised suppression is far weaker than $4\times$ and is insufficient to neutralise the attack; we quantify this failure empirically in \cref{sec:results_alie}.
+
+%==================================================================
+\section{Formal Complexity Analysis}
+\label{sec:aegis_complexity}
+%==================================================================
+
+\begin{theorem}[$\mathcal{O}(\nclients d)$ Linear-Time Complexity of \aegis{}]
+\label{thm:complexity}
+Let $\nclients$ represent the total number of clients, $\dimmodel$ be the model dimension, and $k = |S_1|$ be the number of clients actively surviving the Pass~1 directional screening ($k \leq \nclients$). We prove that the complete \aegis{} aggregation pipeline for a single round executes in exactly $\mathcal{O}(\nclients d)$ time in the absolute worst case, and $\mathcal{O}(kd)$ time in the expected case where the Pass~1 screen eliminates a constant fraction of the $\nclients$ submissions.
+\end{theorem}
+
+\begin{proof}[Complexity Derivation]
+We meticulously account for every single operational stage within the pipeline:
+
+\textbf{Step 1 (Delta computation).}
+Executing $\nclients$ vector subtractions of dimension $d$ demands precisely $\mathcal{O}(\nclients d)$.
+
+\textbf{Step 2 (Pass 1 median + cosine screen).}
+Deriving the coordinate-wise median over $\nclients$ vectors of dimension $d$ typically requires sorting $\nclients$ values per coordinate: $\mathcal{O}(\nclients d\log \nclients)$ with a standard sort, or firmly $\mathcal{O}(\nclients d)$ when applying a linear-time median algorithm like QuickSelect. Scoring the cosine similarity requires exactly $\mathcal{O}(\nclients d)$. Total constraint: $\mathcal{O}(\nclients d)$.
+
+\textbf{Step 3 (Pass 2 median).}
+Re-computing the coordinate-wise median strictly over the $k \leq \nclients$ surviving vectors requires $\mathcal{O}(kd)$.
+
+\textbf{Step 4 (Dual scoring).}
+Calculating $\nclients$ Euclidean distances ($\mathcal{O}(\nclients d)$) alongside $\nclients$ new cosine similarities ($\mathcal{O}(\nclients d)$) sums perfectly to $\mathcal{O}(\nclients d)$.
+
+\textbf{Step 5 (MAD threshold + filter).}
+Extracting $\Med(\{E_i\})$ and $\mathrm{MAD}(\{E_i\})$ from $\nclients$ scalar distances costs a trivial $\mathcal{O}(\nclients)$. Applying the threshold over the set similarly costs $\mathcal{O}(\nclients)$. Total constraint: $\mathcal{O}(\nclients)$.
+
+\textbf{Step 6 (Volume clipping).}
+Executing a single median over $|A_t| \leq \nclients$ scalars, followed directly by $|A_t|$ clamp operations, costs $\mathcal{O}(\nclients)$.
+
+\textbf{Step 7 (EMA update).}
+Updating $|A_t|$ scalar operations costs exactly $\mathcal{O}(\nclients)$.
+
+\textbf{Step 8 (Credit scores).}
+Applying $|A_t|$ scalar divisions and additions strictly costs $\mathcal{O}(\nclients)$.
+
+\textbf{Step 9 (Weighted aggregation).}
+Performing $|A_t|$ scalar--vector multiplications and accumulating them into a single vector requires $\mathcal{O}(|A_t| \cdot d) = \mathcal{O}(kd)$.
+
+Scanning the pipeline, the structurally dominant terms are $\mathcal{O}(\nclients d)$ (from Steps 1, 2, and 4) alongside $\mathcal{O}(kd)$ (from Steps 3 and 9). Because $k \leq \nclients$, our overall execution complexity locks securely at $\mathcal{O}(\nclients d)$. Furthermore, in the typical operating regime where Pass~1 successfully eliminates $\nclients - k$ adversarial submissions (meaning $k = \Theta(\nclients)$ and a constant fraction survive), our underlying constants improve dramatically, allowing Pass~2 and the final aggregation steps to run cleanly in $\mathcal{O}(kd)$.
+
+By stark contrast, legacy systems like Multi-Krum and Bulyan demand the computation of massive pairwise distance matrices, punishing the server with an $\mathcal{O}(\nclients^2 d)$ cost. To put this in perspective: at $\nclients = 30$ and $d \approx 1.12 \times 10^6$ (our ImprovedCNN benchmark; \cref{tab:model_arch}), Bulyan demands on the order of $\nclients^2 d \approx 1.0 \times 10^9$ floating-point multiply--add operations per single round, whereas \aegis{} demands only $\Ocal{\nclients d} \approx 3.4 \times 10^7$ — an $\nclients$-fold ($30\times$) reduction in compute load.
+\end{proof}
+
+\begin{remark}
+Our $\mathcal{O}(kd)$ theoretical bound in \cref{thm:complexity} rightfully assumes the deployment of a linear-time coordinate-wise median (QuickSelect). In our physical PyTorch implementation (\texttt{torch.median}), the library executes a standard sort-based algorithm, technically contributing an additional $\log \nclients$ factor to every coordinate. However, for a network size of $\nclients = 30$, $\log \nclients \approx 5$, which translates to a completely negligible overhead in physical wall-clock time. The formal asymptotic $\mathcal{O}(kd)$ characterisation of our aggregation stage remains fully validated regardless of the backend median algorithm chosen.
+\end{remark}
+
+%==================================================================
+\section{Correctness Invariants and Failure-Mode Analysis}
+\label{sec:aegis_correctness}
+%==================================================================
+
+To synthesise our architectural choices, \Cref{tab:design_decisions} cleanly maps every major design decision embedded within \aegis{} directly to the specific failure mode it fundamentally prevents, alongside the legacy alternative we chose to reject.
+
+\begin{table}[H]
+\centering
+\caption{\aegis{} design decisions and their adversarial rationale.}
+\label{tab:design_decisions}
+\begin{tabularx}{\linewidth}{lXl}
+\toprule
+\textbf{Design Decision} & \textbf{Failure Mode Prevented} & \textbf{Alternative Rejected} \\
+\midrule
+Two-pass median & Center Drag biasing all downstream scores under \ipm{}/sign-flip & Single-pass CWMed \\
+\addlinespace
+$\taucosine = -0.3$ (lenient) & False rejection of honest Non-IID clients with moderate divergence & Hard gate at $\taucosine = 0$ \\
+\addlinespace
+MAD threshold & Breakdown-resistant scale estimate up to the median's $0.5$ point (validated through $f/\nclients = 0.30$) & Std-deviation threshold \\
+\addlinespace
+Adaptive $k^{(t)}$ decay & Over-rejection during high-variance warmup phase & Fixed $k = 3.0$ \\
+\addlinespace
+$k_{\text{floor}} = 4$ & Under-relaxation in persistent Non-IID setting & No floor \\
+\addlinespace
+Cosine penalty (soft, $\alpha = 30$) & Sign-flip/\ipm{} influence without total exclusion & Hard cosine gate \\
+\addlinespace
+EMA reputation ($\gamma = 0.95$) & ALIE and low-$\varepsilon$ \ipm{} accumulation over 20-round window & No cross-round memory \\
+\addlinespace
+Credit ramp ($T_{\text{cr}} = 100$) & Premature geometric suppression of legitimate early-round variance & Immediate full scoring \\
+\addlinespace
+Volume clipping ($2\times$ median) & Volume Spam amplification by inflated $n_i$ claims & Raw data-size weighting \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\end{document}

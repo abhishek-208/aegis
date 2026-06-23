@@ -1,0 +1,113 @@
+\documentclass[../main.tex]{subfiles}
+\begin{document}
+
+\chapter{INTRODUCTION}
+\label{ch:introduction}
+
+Federated Learning (FL) enables a population of distributed edge devices to collaboratively train a shared global model without ever exchanging raw, privacy-sensitive data \citep{mcmahan2017communication}. In this paradigm, each participating node trains a model locally on its own dataset and transmits only a compressed model update---specifically, a gradient vector---to a central aggregation server. The server then combines these local updates into a new global model and broadcasts it back to the network. This approach is highly attractive for applications where data locality, strict privacy regulations, or communication bandwidth constraints make traditional centralised training impossible. Smart devices, medical institutions, autonomous vehicle fleets, and industrial IoT deployments all perfectly fit this profile.
+
+However, the core vulnerability of FL lies precisely in its decentralised nature: the aggregation server has absolutely no visibility into any participant's local data or training process. We observe only the final submitted gradient vectors. A compromised node can easily exploit this opacity to submit a \emph{poisoned} gradient. These adversarial updates are explicitly designed to degrade the global model's accuracy, insert hidden backdoors, or prevent convergence entirely. Because the server cannot inspect the underlying data, it cannot detect the attack through direct verification. We refer to these compromised nodes as \emph{\byz{} clients}. Defending the federated aggregation process against their malicious submissions is the central problem we address in this thesis.
+
+%------------------------------------------------------------------
+\section{Motivation: Federated Learning in Heterogeneous Edge Networks}
+\label{sec:intro_motivation}
+%------------------------------------------------------------------
+
+Two fundamental structural properties of realistic FL deployments make defending against Byzantine attacks substantially harder than it might initially appear.
+
+\textbf{Bandwidth.}
+Edge nodes typically communicate over constrained, unreliable links. A learning protocol is only operationally practical if its per-round communication cost scales with the model dimension $\dimmodel$, rather than the local dataset size. FL satisfies this requirement by construction: each node transmits exactly one gradient vector of dimension $\dimmodel$ per round, regardless of how many thousands of samples it holds locally. A naive centralised approach requiring raw data upload would consume $4$--$5$ orders of magnitude more bandwidth on typical vision datasets.
+
+\textbf{Privacy.}
+Local data at each node is often highly sensitive, ranging from medical records and proprietary telemetry to personal user behaviour logs. The FL protocol guarantees that the server observes only abstract gradient vectors, never the underlying data, preserving a strict privacy boundary throughout the entire training lifecycle.
+
+Within this constrained architecture, the aggregation node receives gradient vectors from $\nclients$ participants per round and must produce a reliable, updated global model. When all participants are honest, the standard \fedavg{} algorithm converges provably \citep{mcmahan2017communication}. The problem, however, is that in open, heterogeneous deployment environments, assuming universal honesty is simply untenable. An adversary who gains access to even one participant's software stack can execute a \byz{} attack by supplying a manipulated gradient vector $\locgrad{byz}$ whose net effect on the global model is actively harmful. Because we see only the gradient vector---and never the local data or training logs---we cannot verify the integrity of an update by inspecting its source. Consequently, all our defensive mechanisms must operate exclusively on the statistical geometry of the received gradient population. This severe operational constraint defines the scope of this thesis.
+
+%------------------------------------------------------------------
+\section{The Adversarial Landscape: Byzantine Threats in Federated Learning}
+\label{sec:intro_threats}
+%------------------------------------------------------------------
+
+\byz{} failures in distributed systems are uniquely dangerous because a compromised node is completely indistinguishable from an honest node by its identity alone. Instead, we must identify adversaries purely by observing the statistical behaviour of their gradient submissions over time.
+
+\subsection{Untargeted Model Poisoning}
+\label{sec:intro_untargeted}
+
+Untargeted attacks aim to broadly destabilise global model convergence or completely collapse classification accuracy across all task classes. We consider several potent threat vectors:
+
+\begin{itemize}
+    \item \textbf{Sign-Flip Attack.}
+    The adversary abruptly reverses the honest update direction by submitting $\locgrad{byz} = -s\,\honmean$, where $\honmean$ is the honest mean update and $s > 1$ amplifies the negation. Each poisoned gradient directly subtracts from the round's honest aggregate, actively opposing gradient descent and pulling the model away from convergence.
+
+    \item \textbf{Label-Flip Attack.}
+    The adversary systematically alters the labels of its local training data (e.g., mapping $y \leftarrow C - 1 - y$ for $C$ classes) before computing any gradients. This produces structurally corrupted updates that point toward a distorted loss surface. Ultimately, this effectively trains the global model to misclassify inputs across all classes.
+
+    \item \textbf{A Little Is Enough (ALIE).}
+    In this stealthy attack, the adversary carefully constructs a poisoned gradient that lies comfortably within the coordinate-wise variance band of the honest population. This makes the update statistically indistinguishable from a noisy-but-legitimate client, while still biasing the aggregate away from the true optimum \citep{baruch2019little}. Formally, we define the ALIE update as:
+    \begin{equation}
+        \locgrad{byz}^{ALIE} = \mu - z \cdot \sigma
+    \end{equation}
+    where $\mu$ and $\sigma$ are the coordinate-wise mean and standard deviation of the honest gradients, and $z$ acts as a stealth multiplier. ALIE successfully defeats traditional, variance-blind geometric filters.
+
+    \item \textbf{Inner Product Manipulation (\ipm{}).}
+    The adversary produces a poisoned update $\locgrad{byz}$ such that its inner product with the honest mean is strictly negative, i.e., $\inner{\locgrad{byz}}{\honmean} < 0$ \citep{xie2020fall}. Remarkably, a single \ipm{} vector can negate the net honest gradient for that entire round, bringing convergence to a halt. \ipm{} is widely considered the hardest attack to defeat geometrically because the poison vector's overall magnitude perfectly mimics that of honest updates.
+
+    \item \textbf{Volume Spam Attack.}
+    The adversary artificially inflates their reported local dataset size---for instance, claiming to have trained on millions of fictional samples---to disproportionately dominate the server's weighted aggregate. If we do not enforce strict volume clipping or weighting constraints at the aggregator level, a single volume spammer can completely overwhelm the genuine contributions of the entire honest population.
+
+    \item \textbf{Sybil Attack.}
+    A single adversarial node registers $m > 1$ fake Sybil identities, with each identity submitting a highly correlated poisoned update. The effective \byz{} fraction artificially swells to $m\bclients/\nclients$, potentially breaching any static tolerance bounds we assumed during system design.
+\end{itemize}
+
+\subsection{Targeted Backdoor Attacks}
+\label{sec:intro_targeted}
+
+In targeted attacks, the adversary plays a longer, more deceptive game. They preserve the global model's accuracy on benign inputs while forcing it to reliably misclassify a specific, hidden trigger pattern. These attacks easily survive standard accuracy-based evaluations and are operationally dangerous precisely because the model appears perfectly healthy until the trigger is actively presented. We restrict the scope of this thesis to untargeted model-poisoning attacks; targeted backdoor robustness lies outside our evaluation and is noted here only to situate our work within the broader threat landscape.
+
+%------------------------------------------------------------------
+\section{The Compounding Crisis: Pathological Non-IID Data}
+\label{sec:intro_noniid}
+%------------------------------------------------------------------
+
+In realistic FL deployments, participating nodes hold data drawn from fundamentally different distributions. Devices across different geographic regions observe varying class frequencies; specialised hospitals serve vastly different patient demographics; industrial sensors monitor entirely different physical processes. The resulting local data distributions are \emph{pathologically} Non-IID. They are not merely heterogeneous in label frequency---the standard benchmark assumption---but are heterogeneous deep within the \emph{feature space}, where specialist nodes may hold data from entirely disjoint class subsets.
+
+This profound heterogeneity creates a lethal interaction with standard \byz{} defences. Nearly every known geometric aggregation scheme \citep{blanchard2017machine,yin2018byzantine} filters outliers by measuring their deviation from a population median. However, under pathological Non-IID conditions, honest updates from specialist nodes are naturally median-distant, meaning they geometrically resemble outliers. Consequently, an aggregator tuned to reject geometric anomalies will systematically discard the most informative honest updates. It eliminates critical domain expertise while inadvertently admitting stealthy \byz{} vectors that strategically park themselves near the median.
+
+The failure modes of existing defences are specific, severe, and widely documented. Multi-Krum \citep{blanchard2017machine} selects the $\nclients - \bclients - 2$ updates geometrically closest to their neighbours. When honest nodes from different data domains form geometrically distant clusters, Multi-Krum stubbornly retains only one cluster and discards the rest---completely indifferent to whether the discarded updates are \byz{} or merely valuable specialists. The Coordinate-wise Trimmed Mean \citep{yin2018byzantine} indiscriminately truncates coordinate extremes; yet, under high-dimensional Non-IID gradients, those very extremes carry the crucial learning signal. Bulyan \citep{mhamdi2018hidden} compounds Krum's selection bias before applying its trimming. Meanwhile, FoolsGold \citep{fung2020limitations} successfully targets Sybil-sourced cosine similarity but provides absolutely no defence against the magnitude-cloaked \ipm{} attack.
+
+Ultimately, no existing single-stage aggregator simultaneously satisfies the three critical requirements of the Non-IID \byz{} threat model: (i)~tolerance of pathological Non-IID gradient diversity among honest nodes, (ii)~\ipm{} resilience, and (iii)~Sybil resilience. This severe architectural gap motivates our design of \aegis{}.
+
+%------------------------------------------------------------------
+\section{Contributions of This Thesis}
+\label{sec:intro_contributions}
+%------------------------------------------------------------------
+
+This thesis presents \textbf{\aegis{}}: a two-pass, dual-metric, reputation-augmented aggregation protocol engineered for Byzantine-resilient Federated Learning in highly heterogeneous, Non-IID federated networks. The specific, verifiable contributions we make are as follows:
+
+\begin{itemize}
+
+    \item \textbf{Two-Pass Median Decontamination.}
+    \aegis{} computes a preliminary coordinate-wise median $\medone$ from all $\nclients$ received updates. We then screen out directionally adversarial updates---those whose cosine similarity $\inner{\locgrad{i}}{\medone}/(\norm{\locgrad{i}}\,\norm{\medone})$ falls below a threshold $\taucosine$---before computing a clean, debiased reference median $\medtwo$. This vital two-pass structure ensures that \ipm{}-class attacks cannot corrupt the reference point used for downstream scoring, directly solving a failure mode that currently defeats all single-pass median-based defences in the literature.
+
+    \item \textbf{Dual-Metric Geometric Filtering.}
+    We simultaneously score every admitted update using two complementary metrics: (i)~the Euclidean distance $E_i = \norm{\locgrad{i} - \medtwo}_2$, which captures magnitude anomalies, and (ii)~the cosine penalty $P_i = 1 - \inner{\locgrad{i}}{\medtwo}/(\norm{\locgrad{i}}\norm{\medtwo})$, which isolates directional anomalies. Magnitude-only filters fail entirely against \ipm{}, while direction-only filters collapse under amplitude-scaled Sybil floods. \aegis{} applies both simultaneously, effectively closing both vulnerability gaps.
+
+    \item \textbf{$\Ocal{Kd}$ Linear-Time Aggregation.}
+    The complete \aegis{} pipeline---encompassing two median passes, dual-metric scoring, adaptive threshold computation, and final weighted aggregation---executes in exactly $\Ocal{Kd}$ time, where $K \leq \nclients$ is the filter budget and $\dimmodel$ is the model parameter dimension. Because this scales linearly with $\dimmodel$, it perfectly matches the computational cost floor of standard \fedavg{}. This makes \aegis{} immediately deployable on compute-constrained aggregation hardware without incurring round-latency penalties.
+
+    \item \textbf{Adaptive MAD-Based Thresholding.}
+    We dynamically adapt the rejection threshold every round using the Median Absolute Deviation (MAD) of the Euclidean distance distribution, parameterised by a round-decaying multiplier $k^{(t)}$. This intelligent scaling prevents catastrophic over-rejection during the chaotic early stages of training---when honest gradient variance is naturally large---while systematically tightening the defensive boundary as the model converges.
+
+    \item \textbf{Cross-Round Reputation Tracking.}
+    \aegis{} maintains an Exponential Moving Average (EMA) reputation score $R_i$ for each network participant across successive rounds. We exponentially decay the influence of participants that persistently submit high-cosine-penalty updates. This allows us to smoothly suppress stealthy, long-term attackers that might individually evade round-wise geometric thresholds.
+
+    \item \textbf{Validated Resilience at 30\% Byzantine Fraction.}
+    Through rigorous empirical evaluation under Label-Sharded Non-IID data (4 shards/client across 30 network nodes), we demonstrate that \aegis{} maintains a test accuracy exceeding 74\% under severe label-flip attacks, around 67\% under sign-flip, and 63\% under the \ipm{} attack---all at a high \byz{} fraction of $\bclients/\nclients = 0.30$. In stark contrast, every baseline geometric aggregator collapses to below 50\% accuracy under at least one of these identical conditions.
+
+    \item \textbf{Sybil Resilience Through Cosine-Similarity Deduplication.}
+    Finally, \aegis{} actively detects Sybil clusters by identifying groups of submissions exhibiting anomalously high pairwise cosine similarity. We apply a graduated penalty \citep{fung2020limitations} to mathematically down-weight these correlated contributions, stripping Sybil identities of their artificial voting power.
+
+\end{itemize}
+
+
+\end{document}

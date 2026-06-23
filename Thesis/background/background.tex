@@ -1,0 +1,318 @@
+\documentclass[../main]{subfiles}
+\begin{document}
+
+\chapter{BACKGROUND AND THREAT MODEL}
+\label{ch:background}
+
+In this chapter, we establish the technical and adversarial foundations upon which \aegis{} is built. First, in \Cref{sec:bg_fl}, we formalise the standard federated learning framework and outline its core convergence assumptions. We then explore the challenging realities of pathological Non-IID environments in \Cref{sec:bg_noniid}, where we introduce and quantify the ``Byzantine Tax''---the hidden cost these environments inflict on standard robust aggregators. Following this, \Cref{sec:bg_existing} surveys the current landscape of Byzantine-resilient aggregation schemes and their theoretical tolerance guarantees. Finally, we establish our formal threat model and attacker capabilities in \Cref{sec:threat_model}, culminating in the precise mathematical formulations of each attack strategy in \Cref{sec:threat_matrix}.
+
+%==================================================================
+\section{Federated Learning: Formal Foundations}
+\label{sec:bg_fl}
+%==================================================================
+
+Fundamentally, Federated Learning solves a distributed optimisation problem of the form:
+\begin{equation}
+    \min_{w \in \R^{\dimmodel}} \; F(w) \;=\; \sum_{i=1}^{\nclients} \frac{|\mathcal{D}_i|}{|\mathcal{D}|} F_i(w),
+    \label{eq:fl_objective}
+\end{equation}
+where $w \in \R^{\dimmodel}$ represents the global model parameter vector, $\mathcal{D} = \bigcup_{i=1}^{\nclients} \mathcal{D}_i$ is the union of all local datasets, and $F_i(w) = \mathbb{E}_{(x,y) \sim \mathcal{D}_i}[\ell(w; x, y)]$ represents the expected local loss on client $i$.
+
+\textbf{The \fedavg{} Protocol.}
+In a standard \fedavg{} workflow, each communication round $t$ begins with the server broadcasting the current global model $\globmod^{(t)}$ to a selected subset of clients, $\mathcal{S}^{(t)} \subseteq [\nclients]$. These clients execute $E$ steps of local Stochastic Gradient Descent (SGD) on their private data and return their resulting model update:
+\begin{equation}
+    \locgrad{i}^{(t)} = \globmod_i^{(t+1)} - \globmod^{(t)},
+    \label{eq:local_update}
+\end{equation}
+where $\globmod_i^{(t+1)}$ is the model obtained after the $E$ local steps on dataset $\mathcal{D}_i$. The server then aggregates these received updates to compute the next global model:
+\begin{equation}
+    \globmod^{(t+1)} = \globmod^{(t)} + \sum_{i \in \mathcal{S}^{(t)}} \frac{|\mathcal{D}_i|}{|\mathcal{D}_{\mathcal{S}}|} \locgrad{i}^{(t)},
+    \label{eq:fedavg}
+\end{equation}
+where $|\mathcal{D}_{\mathcal{S}}| = \sum_{i \in \mathcal{S}^{(t)}} |\mathcal{D}_i|$ serves as the normalisation factor. Assuming independent and identically distributed (IID) data alongside a convex loss surface, \citet{mcmahan2017communication} prove that \eqref{eq:fedavg} converges gracefully at a rate of $\mathcal{O}(1/T)$ over $T$ rounds. However, this theoretical guarantee collapses in two distinct ways when clients exhibit adversarial behaviour or hold Non-IID data---precisely the dual conditions that define the core focus of this thesis.
+
+%==================================================================
+\section{The Pathological Non-IID Environment}
+\label{sec:bg_noniid}
+%==================================================================
+
+\subsection{The 4-Shard Label Sharding Partition}
+\label{sec:bg_sharding}
+
+Let $\mathcal{Y} = \{0, 1, \ldots, C-1\}$ denote the set of available class labels, where $C = 10$ for the CIFAR-10 dataset. Throughout this thesis, we employ \emph{label sharding}, a severely pathological Non-IID construction originally formulated by \citet{mcmahan2017communication}. Unlike smooth Dirichlet partitions that grant clients varying proportions of every class, label sharding aggressively restricts each client to a very narrow slice of the entire class space.
+
+We implement this by first sorting the global training dataset by class label, ensuring that all samples from a given class sit contiguously. We then divide this sorted index array into $N_{\text{shards}} = \nclients \cdot S$ equal contiguous blocks, where $S$ denotes the number of shards assigned to each client. Finally, we randomly permute these shards and partition them into $\nclients$ disjoint groups. Client $i$ constructs its local dataset by taking the union of its $S$ assigned shards:
+\begin{equation}
+    \mathcal{D}_i = \bigcup_{j \in \mathcal{F}_i} \mathrm{Shard}_j,
+    \qquad
+    |\mathcal{D}_i| = S \left\lfloor \frac{|\mathcal{D}|}{\nclients\, S} \right\rfloor \approx \frac{|\mathcal{D}|}{\nclients},
+    \label{eq:label_shard}
+\end{equation}
+where $\mathcal{F}_i$ represents the specific set of $S$ shard indices assigned to client $i$. For all primary experiments in this thesis, we fix $S = 4$; we detail the exact dataset instantiation parameters in \cref{sec:exp_noniid}.
+
+Because we construct the shards from a label-sorted array, each shard is overwhelmingly dominated by just one or two classes. Consequently, a client holding $S = 4$ shards observes at most $4$ out of the $10$ available classes, yielding a severe class-coverage ratio of just $S/C = 0.40$. Under this partition, our clients behave exactly like domain-specialist nodes: they possess deep, narrow expertise over a small handful of classes, but remain entirely blind to the rest of the dataset. We can directly control this degree of heterogeneity by tuning $S$; a smaller $S$ forces sharper specialisation and creates more extreme Non-IID conditions, whereas a larger $S$ smoothly bridges the gap toward an IID regime.
+
+\subsection{Gradient Divergence Under Pathological Non-IID}
+\label{sec:bg_divergence}
+
+As we heavily fragment the label distribution across our clients, we directly inflate the gradient variance across the network. Following the formal convergence analysis detailed in \cref{app:proofs}, we precisely measure this phenomenon through the \emph{honest gradient variance}:
+\begin{equation}
+    \honvar \;=\; \frac{1}{h} \sum_{i \in \mathcal{H}} \left\| \locgrad{i} - \honmean \right\|^2,
+    \qquad \honmean = \frac{1}{h}\sum_{i \in \mathcal{H}} \locgrad{i},
+    \label{eq:gradient_dissimilarity}
+\end{equation}
+where $\mathcal{H}$ represents the set of all honest clients (formally defined in \cref{sec:bg_byz_tax}), $h = |\mathcal{H}|$, and $\honmean$ is the true honest mean update. Under highly uniform IID data, $\honvar$ is tightly bounded by the natural variance of the stochastic gradient estimator itself; accordingly, our convergence proof successfully assumes a uniform bound $\honvar \leq \sigma_H^2$ across all rounds (\cref{asm:A3,asm:A11}). However, under our 4-shard label sharding partition, we empirically observe $\honvar$ expanding to be 10--50$\times$ larger \citep{zhao2018federated, li2020federated}. This explosion occurs because each client's gradient $\locgrad{i}$ aggressively points toward the local minimiser of its specific $F_i$, a point geometrically distant from the minimisers of all other clients $F_j$.
+
+This massive divergence creates a direct and highly damaging consequence for any robust defence that filters updates by measuring deviation from a population centroid: \emph{honest specialist clients geometrically look like malicious outliers}.
+
+\subsection{The Byzantine Tax}
+\label{sec:bg_byz_tax}
+
+To formalise this damage, let $\mathcal{H} \subseteq [\nclients]$ denote our set of honest clients, and let $A_t \subseteq [\nclients]$ represent the set of clients whose updates are actively admitted (approved) by a given aggregation rule $\mathcal{R}$ at round $t$. We define the \emph{Byzantine Tax} of $\mathcal{R}$ as follows:
+\begin{equation}
+    \mathrm{ByzTax}(\mathcal{R}) \;=\; 1 - \frac{|A_t \cap \mathcal{H}|}{|\mathcal{H}|}.
+    \label{eq:byz_tax}
+\end{equation}
+If $\mathrm{ByzTax}(\mathcal{R}) = 0$, the rule successfully preserves every honest client. Conversely, if $\mathrm{ByzTax}(\mathcal{R}) = 1$, the rule rejects the entire honest population---an outcome functionally identical to a complete Byzantine takeover. This empirical, client-counting metric provides the operational face of the exact same cost that our convergence analysis analytically isolates as the \emph{honest reweighting distortion} $\widetilde{\mathbf{g}}_H - \honmean$ (\cref{app:honest_distortion}). Both metrics capture the silent degradation that a robust rule inflicts on honest contributions before a single attacker even acts.
+
+Under pathological Non-IID label sharding, the Byzantine Tax exacted by traditional centroid-based rules is incredibly severe. For example, Multi-Krum \citep{blanchard2017machine} actively selects updates that minimise a sum-of-squared-distances objective. Consequently, specialist clients naturally exhibiting a large $\|\locgrad{i} - \honmean\|$ are systematically excluded, reliably yielding a disastrous $\mathrm{ByzTax}(\text{Multi-Krum}) \approx 0.3$--$0.5$ in our experiments (\cref{ch:experiments}). Bulyan \citep{mhamdi2018hidden} further compounds this bias by hard-coding Krum's selection phase before its own coordinate trimming. Meanwhile, FoolsGold \citep{fung2020limitations} indiscriminately penalises high-similarity submissions, inadvertently crushing honest specialist clients simply because they happen to share a label-space with an adversary. Ultimately, each of these legacy defences converts a huge fraction of the honest gradient signal into sheer waste, ironically choosing to defend a heavily degraded aggregate.
+
+%==================================================================
+\section{Existing Byzantine-Resilient Aggregation Schemes}
+\label{sec:bg_existing}
+%==================================================================
+
+In \Cref{tab:agg_comparison}, we summarise the core mechanisms and theoretical limits of the principal aggregation defences relevant to our work.
+
+\begin{table}[htbp]
+\centering
+\caption[Comparison of Byzantine-resilient aggregation schemes]{Comparison of Byzantine-resilient aggregation schemes. $\nclients$: total clients; $f = |\mathcal{B}|$: number of Byzantine clients; $d$: model dimension; $k$: Krum selection size. The Tolerance column provides each scheme's \emph{theoretical} breakdown point (the maximum Byzantine count $f$ relative to $\nclients$). While \aegis{} theoretically inherits the median's $f < \nclients/2$ ceiling, we empirically validate its robust performance up to $f/\nclients = 0.30$, with collapse observed at $f/\nclients = 0.40$ (\cref{tab:byz_sweep}).}
+\label{tab:agg_comparison}
+\begin{tabularx}{\linewidth}{lXll}
+\toprule
+\textbf{Method} & \textbf{Core Mechanism} & \textbf{Tolerance} & \textbf{Complexity} \\
+\midrule
+Multi-Krum \citep{blanchard2017machine}
+    & Select $k$ updates minimising neighbourhood distance
+    & $f < \nclients/2 - 2$
+    & $\Ocal{\nclients^2 d}$ \\
+\addlinespace
+Coord.-wise Median \citep{yin2018byzantine}
+    & Take per-coordinate median over all updates
+    & $f < \nclients/2$
+    & $\Ocal{\nclients d}$ \\
+\addlinespace
+Trimmed Mean \citep{yin2018byzantine}
+    & Remove extreme $f$ values per coordinate, average remainder
+    & $f < \nclients/2$
+    & $\Ocal{\nclients d\log \nclients}$ \\
+\addlinespace
+Bulyan \citep{mhamdi2018hidden}
+    & Krum selection then coordinate trimmed mean
+    & $f < \nclients/4$
+    & $\Ocal{\nclients^2 d}$ \\
+\addlinespace
+FoolsGold \citep{fung2020limitations}
+    & Down-weight high cosine-similarity submissions (Sybil defence)
+    & Sybil-specific
+    & $\Ocal{\nclients^2 d}$ \\
+\addlinespace
+\textbf{\aegis{} (this thesis)}
+    & Two-pass median + dual-metric scoring + EMA reputation
+    & $f < \nclients/2$
+    & $\Ocal{\nclients d}$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The most critical takeaway from \cref{tab:agg_comparison} is the strict theoretical limit of Bulyan---historically the highest-robustness scheme available before our work---which strictly requires $f < \nclients/4$. Because we evaluate our system under a demanding 30\% Byzantine fraction ($f = 0.3\nclients$, as defined in \cref{asm:byz_fraction}), Bulyan's fundamental tolerance condition of $f < 0.25\nclients$ is violently breached; it simply cannot be mathematically applied in our setting. Furthermore, every scheme burdened by an $\Ocal{\nclients^2 d}$ complexity incurs a severe quadratic penalty as client pools grow, making them prohibitively slow at scale. In contrast, \aegis{} comfortably inherits the coordinate-wise median's theoretical $f < \nclients/2$ breakdown ceiling while sustaining a highly efficient $\Ocal{\nclients d}$ cost. Empirically, we prove it sustains strong resilience through a severe $f = 0.30\nclients$ adversary fraction. It only eventually collapses at $f = 0.40\nclients$ because natural stochastic per-round subsampling regularly drives the selected adversarial fraction past the theoretical $0.5$ ceiling (\cref{tab:byz_sweep}).
+
+%==================================================================
+\section{Threat Model}
+\label{sec:threat_model}
+%==================================================================
+
+\subsection{System Model}
+\label{sec:sys_model}
+
+We formalise our federated learning system model using the following components:
+\begin{itemize}
+    \item A set of $\nclients$ registered clients $[\nclients] = \{1, 2, \ldots, \nclients\}$. Each client securely holds a private local dataset $\mathcal{D}_i$ distributed according to our label sharding process \eqref{eq:label_shard}.
+    \item A single, honest, and non-colluding aggregation server explicitly tasked with executing the \aegis{} aggregation rule.
+    \item A strictly synchronous communication protocol. In every round, the server broadcasts the global model $\globmod^{(t)}$ to the network, all selected clients compute and return their local updates $\locgrad{i}^{(t)}$, and the server processes these to compute $\globmod^{(t+1)}$ before triggering the next round.
+\end{itemize}
+
+We partition the network into $[\nclients] = \mathcal{H} \cup \mathcal{B}$, separating the honest clients ($\mathcal{H}$) from the Byzantine clients ($\mathcal{B}$). While honest clients reliably follow the protocol to the letter, Byzantine clients are completely unconstrained and may submit any arbitrary update vector they choose.
+
+\subsection{Attacker Capabilities and Assumptions}
+\label{sec:attacker_model}
+
+We grant the adversary controlling the Byzantine set $\mathcal{B}$ a remarkably strong capability model to ensure our evaluations remain realistic under extreme conditions.
+
+\begin{assumption}[Omniscient Adaptive Adversary]
+\label{asm:adversary}
+The adversary fully understands the aggregation algorithm $\mathcal{R}$ running on the server, possesses the exact current global model $\globmod^{(t)}$, and commands enough statistical knowledge of the honest data distribution to accurately estimate the honest mean update $\honmean^{(t)}$. Furthermore, the adversary can fully coordinate all $f = |\mathcal{B}|$ Byzantine clients and adaptively alter their submissions at any point before the round deadline.
+\end{assumption}
+
+\begin{assumption}[Byzantine Fraction Bound]
+\label{asm:byz_fraction}
+We assume the absolute number of Byzantine clients is strictly bounded by:
+\begin{equation}
+    |\mathcal{B}| \;\leq\; \lfloor 0.3\, \nclients \rfloor,
+    \label{eq:byz_bound}
+\end{equation}
+which strictly enforces a clear honest majority of $|\mathcal{H}| \geq \lceil 0.7\, \nclients \rceil$. This 30\% fraction represents the demanding practical regime in which we empirically validate \aegis{}'s resilience (\cref{tab:byz_sweep}). While it sits comfortably below the theoretical $f < \nclients/2$ limit mathematically required for convergence (\cref{asm:A4}), facing 3 adversarial nodes out of every 10 remains an extremely hostile condition. We make no claims of empirical robustness up to the absolute theoretical $f < \nclients/2$ ceiling; as our experiments show, once the global Byzantine fraction reaches $f = 0.4\,\nclients$, random client subsampling frequently causes the \emph{selected} adversarial fraction in a given round to breach the $0.5$ coordinate-wise median breakdown point, ultimately inducing collapse (\cref{tab:byz_sweep}).
+\end{assumption}
+
+\begin{assumption}[Bounded Honest Gradients and Variance]
+\label{asm:grad_bound}
+We assume there exists a constant $G > 0$ such that the norm of every honest client's gradient is strictly bounded across all rounds $t$:
+\begin{equation}
+    \left\| \locgrad{i}^{(t)} \right\| \;\leq\; G < \infty, \quad \forall i \in \mathcal{H}.
+    \label{eq:grad_bound}
+\end{equation}
+Furthermore, we assume the honest gradient variance $V_H^{(t)}$, mathematically representing the structural spread of the honest population around the honest mean $\bar{\mathbf{g}}_H^{(t)}$, is strictly bounded by a constant $\sigma_H^2$:
+\begin{equation}
+    V_H^{(t)} \;=\; \frac{1}{h} \sum_{i \in \mathcal{H}} \left\|\mathbf{g}_i^{(t)} - \bar{\mathbf{g}}_H^{(t)}\right\|^2 \;\leq\; \sigma_H^2.
+\end{equation}
+These specific conditions mathematically guarantee bounded updates and strictly bounded variance during our formal convergence analysis in \cref{app:proofs} (explicitly aligning with \cref{asm:A5} and \cref{asm:A3}).
+\end{assumption}
+
+\begin{assumption}[Server Integrity]
+\label{asm:server}
+The aggregation server itself remains perfectly honest and completely uncorrupted. The adversary can only attempt to influence the global model through the malicious gradient updates they inject into the aggregation pipeline.
+\end{assumption}
+
+\textbf{What the adversary cannot do.} While powerful, the adversary cannot (i) intercept or alter honest client updates in transit, (ii) directly hack or corrupt the server node, (iii) modify the global model payload during its broadcast, or (iv) spawn enough nodes to exceed the 30\% fraction bound established in \eqref{eq:byz_bound}.
+
+%==================================================================
+\section{The Threat Matrix: Mathematical Attack Formulations}
+\label{sec:threat_matrix}
+%==================================================================
+
+In this section, we explicitly map out the precise mathematical formulations for each distinct attack class we evaluate. Unless otherwise stated, we treat all listed attacks as untargeted model-poisoning threats.
+
+%------------------------------------------------------------------
+\subsection{Label-Flipping: Structural Feature Corruption (Data Poisoning)}
+\label{sec:attack_label_flip}
+%------------------------------------------------------------------
+
+Label-flipping operates strictly as a \emph{data-poisoning} attack: the adversary actively corrupts the local training data pipeline before any gradient computation even begins. To execute this, the adversary applies a specific label permutation $\pi: \mathcal{Y} \to \mathcal{Y}$ across their local dataset:
+\begin{equation}
+    \tilde{\mathcal{D}}_{mal} = \left\{ \bigl(x_j,\; \pi(y_j)\bigr) : (x_j, y_j) \in \mathcal{D}_{mal} \right\},
+    \label{eq:label_flip}
+\end{equation}
+where $\pi$ typically takes the form of a full mathematical reversal $\pi(y) = C - 1 - y$, or a targeted substitution $\pi(y_s) = y_t$ linking a source class $y_s$ directly to a target class $y_t$.
+
+By training exclusively on $\tilde{\mathcal{D}}_{mal}$, the adversary successfully corrupts the model's fundamental feature-label associations directly at the representation level. The resulting local gradient:
+\begin{equation}
+    \locgrad{mal} = \nabla_w \,\mathcal{L}\bigl(\globmod^{(t)};\, \tilde{\mathcal{D}}_{mal}\bigr)
+    \label{eq:label_flip_grad}
+\end{equation}
+is mathematically profound because it is not just an arbitrary vector of noise---it is a completely \emph{valid} gradient mapped to a corrupted but locally consistent objective. Because of this structural validity, separating it from the gradient of an honest but highly specialised client becomes statistically difficult. This ambiguity forms the core challenge of pathological Non-IID environments. Naturally, this attack reaches its peak danger when the adversary designs $\pi$ to perfectly mimic the Non-IID geometric spread of the honest population.
+
+%------------------------------------------------------------------
+\subsection{Sign-Flipping: Blunt Directional Inversion (Model Poisoning)}
+\label{sec:attack_sign_flip}
+%------------------------------------------------------------------
+
+Sign-flipping represents a far blunter, direct model-poisoning approach. Here, the adversary aggressively inverts and scales the honest mean update vector:
+\begin{equation}
+    \locgrad{sf} = -s \cdot \honmean,
+    \qquad s > 1,
+    \label{eq:sign_flip}
+\end{equation}
+where $\honmean$ represents the adversary's best estimate of the current honest mean update (often derived directly from the global model trajectory via $\honmean \approx \globmod^{(t-1)} - \globmod^{(t-2)}$), and $s > 1$ serves as a malicious amplification multiplier.
+
+This attack inflicts direct, calculable damage on the aggregate. If we assume $f = |\mathcal{B}|$ Byzantine clients submit the poisoned $\locgrad{sf}$, while the remaining $h = \nclients - f$ honest clients submit gradients averaging exactly to $\honmean$, the resulting contaminated aggregate becomes:
+\begin{equation}
+    \agggrad = \frac{h}{\nclients}\honmean + \frac{f}{\nclients}(-s\,\honmean) = \frac{h - s f}{\nclients}\honmean.
+    \label{eq:sign_flip_aggregate}
+\end{equation}
+If the adversary sets $s = h/f$, the aggregate immediately zeroes out ($\agggrad = \mathbf{0}$), allowing the Byzantine clients to perfectly cancel the honest momentum and halt convergence in its tracks. Worse, if the adversary sets $s > h/f$, the aggregate reverses its sign entirely, actively driving the global model backward away from its optimum. While sign-flipping delivers devastating power, it completely sacrifices stealth: its unnaturally massive $\norm{\locgrad{sf}}$ is easily flagged by basic magnitude filters. However, as we discussed in \cref{sec:bg_byz_tax}, these filters are notoriously unreliable if they have already collapsed under the weight of the Non-IID Byzantine Tax.
+
+%------------------------------------------------------------------
+\subsection{Inner Product Manipulation: Stealth Bypass of MAD Thresholding}
+\label{sec:attack_ipm}
+%------------------------------------------------------------------
+
+The Inner Product Manipulation (\ipm{}) attack \citep{xie2020fall} surgically exploits the known vulnerabilities of Median Absolute Deviation (MAD)-based geometric thresholds. To execute this, the adversary constructs the vector:
+\begin{equation}
+    \boxed{\locgrad{ipm} = -\varepsilon\,\honmean}
+    \label{eq:ipm}
+\end{equation}
+where $\honmean = \frac{1}{h} \sum_{i \in \mathcal{H}} \locgrad{i}$ acts as the honest mean update (\cref{eq:honest_mean}), and $\varepsilon > 0$ functions as a carefully tuned adversarial scale parameter.
+
+This elegant construction simultaneously achieves three devastating properties:
+
+\textbf{(i) Adversarial Direction.}
+\begin{equation}
+    \inner{\locgrad{ipm}}{\honmean} = -\varepsilon\|\honmean\|^2 < 0.
+    \label{eq:ipm_direction}
+\end{equation}
+Because every submitted \ipm{} update guarantees a strictly negative inner product against the honest mean, the injected gradient continuously opposes the honest descent trajectory.
+
+\textbf{(ii) Controlled Magnitude.}
+\begin{equation}
+    \norm{\locgrad{ipm}} = \varepsilon\|\honmean\|.
+    \label{eq:ipm_norm}
+\end{equation}
+By keeping $\varepsilon$ reasonably small, the adversary reliably forces $\locgrad{ipm}$ to hide deep within the natural Euclidean distance distribution of the honest updates. Formally, if a MAD threshold sits at $T = \mathrm{Med}(\{E_i\}) + k \cdot \mathrm{MAD}(\{E_i\})$, the adversary simply adjusts $\varepsilon$ until $E_{ipm} = \norm{\locgrad{ipm} - \medtwo} \leq T$, completely evading rejection.
+
+\textbf{(iii) Reference Poisoning.}
+If the aggregator blindly relies on a reference point $\medtwo$ computed as a coordinate-wise median across all $\nclients$ updates---including the hidden \ipm{} submissions---a sufficiently large Byzantine presence ($|\mathcal{B}|$) will physically drag $\medtwo$ away from $\honmean$. This quietly sabotages the scoring baseline for every honest client participating in that round. This fatal vulnerability breaks all single-pass median aggregators and serves as the primary motivation for \aegis{}'s resilient two-pass architecture (\cref{ch:methodology}).
+
+%------------------------------------------------------------------
+\subsection{Sybil Attacks: Coordinated Density Clusters Hijacking Spatial Medians}
+\label{sec:attack_sybil}
+%------------------------------------------------------------------
+
+Unlike traditional attacks, a Sybil attack discards the requirement of securing multiple physically distinct adversaries. Instead, a single powerful adversary spawns $m$ phantom Sybil clones of a base poisoned update, controlling them alongside its own compromised submission. Each clone $b_j$ then uploads a slightly perturbed copy:
+\begin{equation}
+    \locgrad{b_j} = \locgrad{byz} + \xi_j, \qquad \xi_j \sim \mathcal{N}(0,\, \sigma_s^2 I_d), \quad j = 1, \ldots, m,
+    \label{eq:sybil}
+\end{equation}
+where we introduce $\sigma_s > 0$ as a minute perturbation magnitude. This noise is carefully calibrated to make each phantom appear mathematically distinct while strictly maintaining a very high pairwise similarity:
+\begin{equation}
+    \mathrm{cos\_sim}(\locgrad{b_j},\, \locgrad{b_k}) \;\approx\; 1 - \frac{\sigma_s^2}{\|\locgrad{byz}\|^2} \;\approx\; 1 \quad \text{for small } \sigma_s.
+    \label{eq:sybil_cosine}
+\end{equation}
+
+By injecting this cluster of near-identical updates, the adversary manufactures an artificial \emph{high-density region} within the gradient space. This heavily impacts the coordinate-wise median: once the Sybil cluster grows to exceed half the participating updates, the phantoms seize majority control over every coordinate, aggressively dragging the median directly toward $\locgrad{byz}$. If an aggregator relies on a filter that cannot detect highly correlated submissions, it experiences an artificially inflated effective Byzantine fraction. Writing $m$ for the number of clones each physical adversary spawns---so that each controls $1+m$ identities and the participant pool swells by $|\mathcal{B}_{physical}|\,m$---this fraction is:
+\begin{equation}
+    f_{eff} = \frac{|\mathcal{B}_{physical}|\,(1 + m)}{\nclients + |\mathcal{B}_{physical}|\,m},
+    \label{eq:sybil_effective}
+\end{equation}
+where $|\mathcal{B}_{physical}|$ is the number of distinct physical adversaries. To illustrate, our experimental configuration uses $|\mathcal{B}_{physical}| = 9$ physical adversaries each spawning $m = 2$ clones, which inflates the effective fraction to $f_{eff} = \frac{9 \times 3}{30 + 9 \times 2} = \frac{27}{48} = 0.5625$---well beyond the coordinate-wise median's $0.5$ breakdown point, and past \aegis{}'s empirical collapse threshold (\cref{tab:byz_sweep}). The danger is acute even for a lone attacker: a single physical adversary ($|\mathcal{B}_{physical}| = 1$) need only spawn $m = 28$ clones to reach $29/58 = 0.50$, weaponising one compromised node to single-handedly breach the honest majority. We re-derive this exact effective fraction directly from the simulator in \cref{eq:sybil_effective_frac}.
+
+Naturally, any defence that neglects to measure the pairwise cosine similarity among submissions remains utterly blind to this Sybil inflation. \aegis{} directly counters this vulnerability by rigorously measuring the pairwise cosine similarity across all admitted updates, immediately applying a graduated suppression penalty to any highly correlated clusters to neutralise the attack (\cref{ch:methodology}).
+
+%==================================================================
+\section{Summary: The Combined Adversarial Challenge}
+\label{sec:bg_summary}
+%==================================================================
+
+To synthesise these threats, \Cref{tab:attack_summary} clearly consolidates all four major attack classes along the precise dimensions most critical to designing a resilient defence.
+
+\begin{table}[htbp]
+\centering
+\caption[Summary of attack properties along defence-critical dimensions]{Summary of attack properties along defence-critical dimensions. \checkmark~= attack actively exploits this property; \texttimes~= attack does not exploit this property.}
+\label{tab:attack_summary}
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Attack} & \textbf{Mechanism} & \textbf{Norm} & \textbf{Direction} & \textbf{Median} & \textbf{Identity} \\
+                &                    & \textbf{Evasion} & \textbf{Evasion} & \textbf{Poisoning} & \textbf{Spoofing} \\
+\midrule
+Label-Flip   & Data corruption       & \checkmark & \checkmark & \texttimes & \texttimes \\
+Sign-Flip    & Direction inversion   & \texttimes & \texttimes & \texttimes & \texttimes \\
+\ipm{}       & Stealth anti-gradient & \checkmark & \texttimes & \checkmark & \texttimes \\
+Sybil        & Density flooding      & \checkmark & \checkmark & \checkmark & \checkmark \\
+ALIE         & Variance exploitation & \checkmark & \checkmark & \checkmark & \texttimes \\
+Volume Spam  & Weight inflation      & \checkmark & \checkmark & \texttimes & \texttimes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The fundamental reality is that no single defensive dimension can defeat all four attacks simultaneously. Filtering by magnitude (\emph{norm-based}) easily blocks sign-flipping but is seamlessly evaded by both \ipm{} and Sybil attacks. Conversely, filtering by direction (\emph{cosine-based}) neutralises sign-flipping and label-flipping but critically relies on establishing a clean reference point, which \ipm{} is explicitly designed to corrupt. Finally, while identity deduplication reliably defeats Sybil clusters, it offers absolutely no protection against a single-identity \ipm{} attacker. Ultimately, any robust defence seeking to conquer all four adversarial threats simultaneously must intelligently fuse all three mechanisms around an impeccably clean, debiased reference point---the exact design philosophy that powers \aegis{}.
+
+\end{document}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell *)",
+      "Bash(pwsh *)",
+      "Bash",
+      "Edit",
+      "Read",
+      "Write",
+      "Bash(npm *\\)\rBash\\(node *\\)\rBash\\(powershell *\\)\rBash\\(git status *\\)\rBash\\(git diff *\\)\rBash\\(dir *\\)\rBash\\(ls *)"
+    ]
+  }
+}
